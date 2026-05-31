@@ -19,7 +19,7 @@ Analyze the provided code diff and identify optimization opportunities — patte
 Return a JSON array. Each item must have:
 - `file`: filename from the diff (string)
 - `line`: approximate line number in the diff (integer)
-- `body`: description of the performance issue and the optimized alternative (string)
+- `body`: description of the performance issue and the optimized alternative — **write in Brazilian Portuguese** (string)
 - `severity`: "high", "medium", or "low" (string)
 
 If no optimizations are found, return an empty array `[]`.

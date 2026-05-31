@@ -23,28 +23,37 @@ async function run({ owner, repo, prNumber, headSha }) {
     .map(f => `### ${f.filename}\n${f.patch}`)
     .join('\n\n');
 
-  const [bugResults, smellResults, optResults, bizResults] = await Promise.all([
+  const [bugRes, smellRes, optRes, bizRes] = await Promise.all([
     bugAgent.analyze(diffText, standards),
     smellAgent.analyze(diffText, standards),
     optAgent.analyze(diffText, standards),
     bizAgent.analyze(diffText, businessRules, standards),
   ]);
 
+  const totalTokens = [bugRes, smellRes, optRes, bizRes].reduce((acc, r) => ({
+    prompt: acc.prompt + (r.tokens?.prompt ?? 0),
+    output: acc.output + (r.tokens?.output ?? 0),
+    total:  acc.total  + (r.tokens?.total  ?? 0),
+  }), { prompt: 0, output: 0, total: 0 });
+
+  console.log(`[orchestrator] PR #${prNumber} — tokens total — prompt: ${totalTokens.prompt}, output: ${totalTokens.output}, total: ${totalTokens.total}`);
+
   const comments = aggregator.consolidate([
-    ...bugResults,
-    ...smellResults,
-    ...optResults,
-    ...bizResults,
+    ...bugRes.comments,
+    ...smellRes.comments,
+    ...optRes.comments,
+    ...bizRes.comments,
   ]);
 
   await githubClient.postReviewComment(owner, repo, prNumber, headSha, comments);
 
   await mongoClient.saveAuditLog({
-    pr_number:  prNumber,
-    repo:       `${owner}/${repo}`,
-    sha:        headSha,
-    agents:     ['bug', 'code_smell', 'optimization', 'business_logic'],
+    pr_number:   prNumber,
+    repo:        `${owner}/${repo}`,
+    sha:         headSha,
+    agents:      ['bug', 'code_smell', 'optimization', 'business_logic'],
     comments,
+    tokens:      totalTokens,
     duration_ms: Date.now() - startTime,
   });
 

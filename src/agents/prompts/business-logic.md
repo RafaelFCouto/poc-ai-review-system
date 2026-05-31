@@ -23,7 +23,7 @@ Analyze the provided code diff against the business rules listed below. Identify
 Return a JSON array. Each item must have:
 - `file`: filename from the diff (string)
 - `line`: approximate line number in the diff (integer)
-- `body`: description of the violated rule (include the rule ID, e.g., RN-03) and what the code should do instead (string)
+- `body`: description of the violated rule (include the rule ID, e.g., RN-03) and what the code should do instead — **write in Brazilian Portuguese** (string)
 - `severity`: "high", "medium", or "low" (string)
 
 If no violations are found, return an empty array `[]`.

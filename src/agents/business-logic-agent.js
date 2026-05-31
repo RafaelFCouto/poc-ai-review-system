@@ -17,14 +17,23 @@ async function analyze(diff, businessRules, standards = '') {
     { text: `## Code diff to analyze\n\n${diff}` },
   ]);
 
+  const usage = result.response.usageMetadata;
+  const tokens = {
+    prompt: usage?.promptTokenCount      ?? 0,
+    output: usage?.candidatesTokenCount  ?? 0,
+    total:  usage?.totalTokenCount       ?? 0,
+  };
+  console.log(`[business-logic-agent] tokens — prompt: ${tokens.prompt}, output: ${tokens.output}, total: ${tokens.total}`);
+
   const text = result.response.text().trim();
 
   try {
-    const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    return JSON.parse(json).map(c => ({ ...c, agent: 'business_logic' }));
+    const json     = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+    const comments = JSON.parse(json).map(c => ({ ...c, agent: 'business_logic' }));
+    return { comments, tokens };
   } catch {
     console.error('[business-logic-agent] failed to parse response:', text.slice(0, 200));
-    return [];
+    return { comments: [], tokens };
   }
 }
 

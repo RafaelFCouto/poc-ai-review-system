@@ -19,7 +19,7 @@ Analyze the provided code diff and identify code smells — patterns that reduce
 Return a JSON array. Each item must have:
 - `file`: filename from the diff (string)
 - `line`: approximate line number in the diff (integer)
-- `body`: description of the smell and a concrete refactoring suggestion (string)
+- `body`: description of the smell and a concrete refactoring suggestion — **write in Brazilian Portuguese** (string)
 - `severity`: "high", "medium", or "low" (string)
 
 If no smells are found, return an empty array `[]`.

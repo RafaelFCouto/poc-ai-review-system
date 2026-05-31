@@ -20,7 +20,7 @@ Analyze the provided code diff and identify concrete bugs — issues that will c
 Return a JSON array. Each item must have:
 - `file`: filename from the diff (string)
 - `line`: approximate line number in the diff (integer)
-- `body`: clear description of the bug and how to fix it (string)
+- `body`: clear description of the bug and how to fix it — **write in Brazilian Portuguese** (string)
 - `severity`: "high", "medium", or "low" (string)
 
 If no bugs are found, return an empty array `[]`.
