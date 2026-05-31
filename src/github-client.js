@@ -16,6 +16,29 @@ async function getDiff(owner, repo, prNumber) {
   }));
 }
 
+const AGENT_LABEL = {
+  bug:            '🐛 Bug Detection',
+  code_smell:     '🔍 Code Smell',
+  optimization:   '⚡ Optimization',
+  business_logic: '📋 Business Logic',
+};
+
+const SEVERITY_LABEL = {
+  high:   '🔴 High',
+  medium: '🟡 Medium',
+  low:    '🟢 Low',
+};
+
+function formatBody(comment) {
+  const agent    = AGENT_LABEL[comment.agent]    || comment.agent.toUpperCase();
+  const severity = SEVERITY_LABEL[comment.severity] || comment.severity;
+  return [
+    `> 🤖 **AI Code Review** — ${agent} | Severity: ${severity}`,
+    '',
+    comment.body,
+  ].join('\n');
+}
+
 async function postReviewComment(owner, repo, prNumber, headSha, comments) {
   for (const comment of comments) {
     try {
@@ -26,14 +49,14 @@ async function postReviewComment(owner, repo, prNumber, headSha, comments) {
         commit_id:   headSha,
         path:        comment.file,
         line:        comment.line,
-        body:        `**[${comment.agent.toUpperCase()}]** ${comment.body}`,
+        body:        formatBody(comment),
       });
     } catch {
       await octokit.issues.createComment({
         owner,
         repo,
         issue_number: prNumber,
-        body: `**[${comment.agent.toUpperCase()}]** \`${comment.file}\` — ${comment.body}`,
+        body: `${formatBody(comment)}\n\n> \`${comment.file}\``,
       });
     }
   }
