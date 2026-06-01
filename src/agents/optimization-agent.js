@@ -1,30 +1,37 @@
-const fs   = require('fs');
-const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const fs     = require('fs');
+const path   = require('path');
+const OpenAI = require('openai').default;
 
-const genAI  = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model  = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' });
+const client = new OpenAI({
+  apiKey:  process.env.GROQ_API_KEY,
+  baseURL: 'https://api.groq.com/openai/v1',
+});
+
+const MODEL  = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 const prompt = fs.readFileSync(path.join(__dirname, 'prompts', 'optimization.md'), 'utf8');
 
 async function analyze(diff, standards = '') {
-  const fullPrompt = standards
+  const systemPrompt = standards
     ? `${prompt}\n\n## Project coding standards\n\n${standards}`
     : prompt;
 
-  const result = await model.generateContent([
-    { text: fullPrompt },
-    { text: `## Code diff to analyze\n\n${diff}` },
-  ]);
+  const response = await client.chat.completions.create({
+    model:       MODEL,
+    temperature: 0.1,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user',   content: `## Code diff to analyze\n\n${diff}` },
+    ],
+  });
 
-  const usage = result.response.usageMetadata;
   const tokens = {
-    prompt: usage?.promptTokenCount      ?? 0,
-    output: usage?.candidatesTokenCount  ?? 0,
-    total:  usage?.totalTokenCount       ?? 0,
+    prompt: response.usage?.prompt_tokens     ?? 0,
+    output: response.usage?.completion_tokens ?? 0,
+    total:  response.usage?.total_tokens      ?? 0,
   };
   console.log(`[optimization-agent] tokens — prompt: ${tokens.prompt}, output: ${tokens.output}, total: ${tokens.total}`);
 
-  const text = result.response.text().trim();
+  const text = response.choices[0].message.content.trim();
 
   try {
     const json     = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
