@@ -8,6 +8,7 @@ const bizAgent      = require('./agents/business-logic-agent');
 const aggregator    = require('./agents/aggregator');
 
 const JIRA_PROJECT_KEY = process.env.JIRA_PROJECT_KEY || 'SALA';
+const LLM_MODEL        = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 async function run({ owner, repo, prNumber, headSha }) {
   console.log(`[orchestrator] PR #${prNumber} — ${owner}/${repo}`);
@@ -51,6 +52,7 @@ async function run({ owner, repo, prNumber, headSha }) {
     pr_number:   prNumber,
     repo:        `${owner}/${repo}`,
     sha:         headSha,
+    model:       LLM_MODEL,
     agents:      ['bug', 'code_smell', 'optimization', 'business_logic'],
     comments,
     tokens:      totalTokens,

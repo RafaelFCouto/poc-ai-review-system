@@ -29,11 +29,13 @@ const SEVERITY_LABEL = {
   low:    '🟢 Low',
 };
 
+const LLM_MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
 function formatBody(comment) {
-  const agent    = AGENT_LABEL[comment.agent]    || comment.agent.toUpperCase();
-  const severity = SEVERITY_LABEL[comment.severity] || comment.severity;
+  const agent    = AGENT_LABEL[comment.agent]        || comment.agent.toUpperCase();
+  const severity = SEVERITY_LABEL[comment.severity]  || comment.severity;
   return [
-    `> 🤖 **AI Code Review** — ${agent} | Severity: ${severity}`,
+    `> 🤖 **AI Code Review** — ${agent} | Severity: ${severity} | Model: \`${LLM_MODEL()}\``,
     '',
     comment.body,
   ].join('\n');
