@@ -16,12 +16,7 @@ async function getDiff(owner, repo, prNumber) {
   }));
 }
 
-const AGENT_LABEL = {
-  bug:            '🐛 Bug Detection',
-  code_smell:     '🔍 Code Smell',
-  optimization:   '⚡ Optimization',
-  business_logic: '📋 Business Logic',
-};
+const AGENT_LABEL = '📋 Business Rules';
 
 const SEVERITY_LABEL = {
   high:   '🔴 High',
@@ -32,10 +27,9 @@ const SEVERITY_LABEL = {
 const LLM_MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 function formatBody(comment) {
-  const agent    = AGENT_LABEL[comment.agent]        || comment.agent.toUpperCase();
   const severity = SEVERITY_LABEL[comment.severity]  || comment.severity;
   return [
-    `> 🤖 **AI Code Review** — ${agent} | Severity: ${severity} | Model: \`${LLM_MODEL()}\``,
+    `> 🤖 **AI Code Review** — ${AGENT_LABEL} | Rule: \`${comment.rule_id}\` | Severity: ${severity} | Model: \`${LLM_MODEL()}\``,
     '',
     comment.body,
   ].join('\n');
@@ -64,17 +58,4 @@ async function postReviewComment(owner, repo, prNumber, headSha, comments) {
   }
 }
 
-async function getStandards(owner, repo) {
-  try {
-    const { data } = await octokit.repos.getContent({
-      owner,
-      repo,
-      path: '.review-config/standards.md',
-    });
-    return Buffer.from(data.content, 'base64').toString('utf8');
-  } catch {
-    return '';
-  }
-}
-
-module.exports = { getDiff, postReviewComment, getStandards };
+module.exports = { getDiff, postReviewComment };

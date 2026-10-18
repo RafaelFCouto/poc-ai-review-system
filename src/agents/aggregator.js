@@ -5,7 +5,7 @@ function consolidate(comments) {
   const unique  = [];
 
   for (const comment of comments) {
-    const key = `${comment.file}:${comment.line}:${comment.body.slice(0, 60)}`;
+    const key = JSON.stringify([comment.file, comment.line, comment.rule_id, comment.body]);
     if (!seen.has(key)) {
       seen.add(key);
       unique.push(comment);

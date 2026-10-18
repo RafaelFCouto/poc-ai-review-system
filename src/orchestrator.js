@@ -1,50 +1,40 @@
 const githubClient  = require('./github-client');
 const mcpClient     = require('./mcp-client');
 const mongoClient   = require('./mongodb-client');
-const bugAgent      = require('./agents/bug-agent');
-const smellAgent    = require('./agents/smell-agent');
-const optAgent      = require('./agents/optimization-agent');
 const bizAgent      = require('./agents/business-logic-agent');
 const aggregator    = require('./agents/aggregator');
+const { MODEL }     = require('./agents/llm-client');
 
 const JIRA_PROJECT_KEY = process.env.JIRA_PROJECT_KEY || 'SALA';
-const LLM_MODEL        = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 async function run({ owner, repo, prNumber, headSha }) {
   console.log(`[orchestrator] PR #${prNumber} — ${owner}/${repo}`);
   const startTime = Date.now();
 
-  const [diff, businessRules, standards] = await Promise.all([
+  const [diff, businessRules] = await Promise.all([
     githubClient.getDiff(owner, repo, prNumber),
     mcpClient.getBusinessRules(JIRA_PROJECT_KEY),
-    githubClient.getStandards(owner, repo),
   ]);
 
   const diffText = diff
     .map(f => `### ${f.filename}\n${f.patch}`)
     .join('\n\n');
 
-  const [bugRes, smellRes, optRes, bizRes] = await Promise.all([
-    bugAgent.analyze(diffText, standards),
-    smellAgent.analyze(diffText, standards),
-    optAgent.analyze(diffText, standards),
-    bizAgent.analyze(diffText, businessRules, standards),
-  ]);
+  const bizRes = await bizAgent.analyze(diffText, businessRules);
 
-  const totalTokens = [bugRes, smellRes, optRes, bizRes].reduce((acc, r) => ({
-    prompt: acc.prompt + (r.tokens?.prompt ?? 0),
-    output: acc.output + (r.tokens?.output ?? 0),
-    total:  acc.total  + (r.tokens?.total  ?? 0),
-  }), { prompt: 0, output: 0, total: 0 });
+  const totalTokens = {
+    prompt: bizRes.tokens?.prompt ?? 0,
+    output: bizRes.tokens?.output ?? 0,
+    total:  bizRes.tokens?.total ?? 0,
+  };
 
   console.log(`[orchestrator] PR #${prNumber} — tokens total — prompt: ${totalTokens.prompt}, output: ${totalTokens.output}, total: ${totalTokens.total}`);
 
-  const comments = aggregator.consolidate([
-    ...bugRes.comments,
-    ...smellRes.comments,
-    ...optRes.comments,
-    ...bizRes.comments,
-  ]);
+  const comments = aggregator.consolidate(bizRes.comments);
+  const changedFiles = new Set(diff.map(file => file.filename));
+  if (comments.some(comment => !changedFiles.has(comment.file))) {
+    throw new Error('Business-rule finding references a file outside the PR diff');
+  }
 
   await githubClient.postReviewComment(owner, repo, prNumber, headSha, comments);
 
@@ -52,8 +42,8 @@ async function run({ owner, repo, prNumber, headSha }) {
     pr_number:   prNumber,
     repo:        `${owner}/${repo}`,
     sha:         headSha,
-    model:       LLM_MODEL,
-    agents:      ['bug', 'code_smell', 'optimization', 'business_logic'],
+    model:       MODEL,
+    agents:      ['business_logic'],
     comments,
     tokens:      totalTokens,
     duration_ms: Date.now() - startTime,

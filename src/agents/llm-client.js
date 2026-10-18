@@ -28,13 +28,15 @@ async function chat(systemPrompt, userMessage) {
 }
 
 function parseJson(text, agentName) {
+  let parsed;
   try {
-    const json = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-    return JSON.parse(json);
-  } catch {
-    console.error(`[${agentName}] failed to parse response:`, text.slice(0, 200));
-    return [];
+    const json = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    parsed = JSON.parse(json);
+  } catch (cause) {
+    throw new Error(`[${agentName}] invalid JSON response`, { cause });
   }
+  if (!Array.isArray(parsed)) throw new Error(`[${agentName}] response must be a JSON array`);
+  return parsed;
 }
 
 module.exports = { chat, parseJson, MODEL };

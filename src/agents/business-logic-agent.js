@@ -4,12 +4,25 @@ const { chat, parseJson } = require('./llm-client');
 
 const promptBase = fs.readFileSync(path.join(__dirname, 'prompts', 'business-logic.md'), 'utf8');
 
-async function analyze(diff, businessRules, standards = '') {
-  let system = promptBase.replace('{{BUSINESS_RULES}}', businessRules);
-  if (standards) system += `\n\n## Project coding standards\n\n${standards}`;
+async function analyze(diff, businessRules) {
+  if (typeof businessRules !== 'string' || !businessRules.trim()) {
+    throw new Error('Business-rule review requires non-empty business rules');
+  }
+  const system = promptBase.replace('{{BUSINESS_RULES}}', () => businessRules);
   const { text, tokens } = await chat(system, `## Code diff to analyze\n\n${diff}`);
   console.log(`[business-logic-agent] tokens — prompt: ${tokens.prompt}, output: ${tokens.output}, total: ${tokens.total}`);
-  const comments = parseJson(text, 'business-logic-agent').map(c => ({ ...c, agent: 'business_logic' }));
+  const comments = parseJson(text, 'business-logic-agent').map(c => {
+    if (!c || typeof c !== 'object' || Array.isArray(c) ||
+        typeof c.file !== 'string' || !c.file.trim() ||
+        !Number.isSafeInteger(c.line) || c.line < 1 ||
+        typeof c.rule_id !== 'string' || !c.rule_id.trim() ||
+        typeof c.body !== 'string' || !c.body.trim() ||
+        !['high', 'medium', 'low'].includes(c.severity)) {
+      throw new Error('Invalid business-rule finding: expected file, line, rule_id, body and severity');
+    }
+    return { file: c.file, line: c.line, rule_id: c.rule_id, body: c.body,
+      severity: c.severity, agent: 'business_logic' };
+  });
   return { comments, tokens };
 }
 

@@ -1,11 +1,12 @@
 {
   "name": "ai-review-system",
   "version": "1.0.0",
-  "description": "AI-assisted code review system — PoC for TCC IFAM 2026",
+  "description": "Single-agent business-rule code review — PoC for TCC IFAM 2026",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "node --watch src/app.js"
+    "dev": "node --watch src/app.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk":    "^1.10.2",
