@@ -31,7 +31,7 @@ function formatBody(comment) {
   return [
     `> 🤖 **AI Code Review** — ${AGENT_LABEL} | Rule: \`${comment.rule_id}\` | Severity: ${severity} | Model: \`${LLM_MODEL()}\``,
     '',
-    `**Regra de negócio violada:** ${comment.rule_source ? `[${comment.rule_id}](${comment.rule_source})` : comment.rule_id}${comment.rule_summary ? ` — ${comment.rule_summary}` : ''}`,
+    `**Regra de negócio violada:** ${comment.rule_id}${comment.rule_summary ? ` — ${comment.rule_summary}` : ''}`,
     '',
     comment.body,
   ].join('\n');

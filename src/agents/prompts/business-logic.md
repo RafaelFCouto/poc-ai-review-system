@@ -24,7 +24,7 @@ Return a JSON array. Each item must have:
 - `file`: filename from the diff (string)
 - `line`: approximate line number in the diff (integer)
 - `rule_id`: the exact business-rule identifier in the supplied context (e.g., RN-01). Jira issue keys such as TCC-5 identify the source task, not the rule; never use them as rule_id. Never invent an RN or infer a violation merely from a code comment mentioning an RN (string)
-- `body`: explain the expected behavior from that rule, quote the relevant expression or describe the missing check visible in the diff, explain the consequence and suggest what the code should do instead. Include the rule identifier and **write in Brazilian Portuguese** (string)
+- `body`: explain the expected behavior from that rule, quote the relevant expression or describe the missing check visible in the diff, explain the consequence and suggest what the code should do instead. Include only the RN identifier as the requirement reference; do not include Jira task keys or Jira links. **Write in Brazilian Portuguese** (string)
 - `severity`: "high", "medium", or "low" (string)
 
 If no violations are found, return an empty array `[]`.

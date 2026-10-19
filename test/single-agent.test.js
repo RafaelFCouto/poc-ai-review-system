@@ -263,7 +263,7 @@ test('general-comment fallback retains the rule and source path', async () => {
   assert.match(context.general[0].body, /src\/service\.js/);
 });
 
-test('inline and fallback comments display the Jira title and link even when body omits the rule', async () => {
+test('inline and fallback comments identify only the RN, without Jira task keys or links', async () => {
   for (const inlineFailure of [false, true]) {
     const context = githubClient({ inlineFailure });
     await context.client.postReviewComment('owner', 'api', 12, 'test-sha', [finding({
@@ -272,7 +272,8 @@ test('inline and fallback comments display the Jira title and link even when bod
       body: 'A condicao >= bloqueia reservas adjacentes.',
     })]);
     const comment = (inlineFailure ? context.general : context.inline)[0];
-    assert.ok(comment.body.includes('**Regra de negócio violada:** [RN-01](https://example.atlassian.net/browse/TCC-5) — Conflito de horarios'));
+    assert.ok(comment.body.includes('**Regra de negócio violada:** RN-01 — Conflito de horarios'));
+    assert.doesNotMatch(comment.body, /TCC-5|example\.atlassian\.net/);
     assert.ok(comment.body.includes('A condicao >= bloqueia reservas adjacentes.'));
   }
 });
