@@ -55,7 +55,7 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
     './github-client': github,
     './mcp-client': { async getBusinessContext(...args) {
       jiraCalls.push(args);
-      return { businessRules: rules, rules: [], issue_keys: args[1], retrieved_at: 'offline',
+      return { businessRules: rules, rules: [{ key: 'RN-01', summary: 'Regra de teste', source: 'https://example.atlassian.net/browse/RN-01' }], issue_keys: args[1], retrieved_at: 'offline',
         mcp: { transport: 'stdio', protocol_version: 'offline-test' } };
     } },
     './jira-reference': load('jira-reference.js'),
@@ -79,6 +79,8 @@ test('review makes one LLM call and audits only the business agent and its token
   assert.deepEqual(normalize(context.posted[0].slice(0, 4)), ['owner', 'api', 12, 'test-sha']);
   assert.equal(context.posted[0][4][0].agent, 'business_logic');
   assert.equal(context.posted[0][4][0].rule_id, 'RN-01');
+  assert.equal(context.posted[0][4][0].rule_summary, 'Regra de teste');
+  assert.equal(context.posted[0][4][0].rule_source, 'https://example.atlassian.net/browse/RN-01');
   assert.equal(context.audits.length, 1);
   assert.deepEqual(normalize(context.audits[0].agents), ['business_logic']);
   assert.deepEqual(normalize(context.audits[0].tokens), { prompt: 11, output: 7, total: 18 });
@@ -146,6 +148,13 @@ test('non-array JSON fails instead of becoming a finding collection', async () =
 test('a finding outside the changed files stops publication', async () => {
   const context = review({ text: JSON.stringify([finding({ file: 'outside.js' })]) });
   await assert.rejects(() => context.orchestrator.run(pr), /outside the PR diff/);
+  assert.equal(context.posted.length, 0);
+  assert.equal(context.audits.length, 0);
+});
+
+test('a finding referencing a rule absent from Jira context stops publication', async () => {
+  const context = review({ text: JSON.stringify([finding({ rule_id: 'TCC-999' })]) });
+  await assert.rejects(() => context.orchestrator.run(pr), /outside the Jira context: TCC-999/);
   assert.equal(context.posted.length, 0);
   assert.equal(context.audits.length, 0);
 });
@@ -228,4 +237,18 @@ test('general-comment fallback retains the rule and source path', async () => {
   assert.equal(context.general.length, 1);
   assert.match(context.general[0].body, /Rule: `RN-01`/);
   assert.match(context.general[0].body, /src\/service\.js/);
+});
+
+test('inline and fallback comments display the Jira title and link even when body omits the rule', async () => {
+  for (const inlineFailure of [false, true]) {
+    const context = githubClient({ inlineFailure });
+    await context.client.postReviewComment('owner', 'api', 12, 'test-sha', [finding({
+      rule_id: 'TCC-5', rule_summary: 'Conflito de horarios',
+      rule_source: 'https://example.atlassian.net/browse/TCC-5',
+      body: 'A condicao >= bloqueia reservas adjacentes.',
+    })]);
+    const comment = (inlineFailure ? context.general : context.inline)[0];
+    assert.ok(comment.body.includes('**Regra de negócio violada:** [TCC-5](https://example.atlassian.net/browse/TCC-5) — Conflito de horarios'));
+    assert.ok(comment.body.includes('A condicao >= bloqueia reservas adjacentes.'));
+  }
 });

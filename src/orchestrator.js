@@ -35,7 +35,14 @@ async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
 
   console.log(`[orchestrator] PR #${prNumber} — tokens total — prompt: ${totalTokens.prompt}, output: ${totalTokens.output}, total: ${totalTokens.total}`);
 
-  const comments = aggregator.consolidate(bizRes.comments);
+  const rulesByKey = new Map(context.rules.map(rule => [rule.key, rule]));
+  const comments = aggregator.consolidate(bizRes.comments).map(comment => {
+    const rule = rulesByKey.get(comment.rule_id);
+    if (!rule) {
+      throw new Error('Business-rule finding references a rule outside the Jira context: ' + comment.rule_id);
+    }
+    return { ...comment, rule_summary: rule.summary, rule_source: rule.source };
+  });
   const changedFiles = new Set(diff.map(file => file.filename));
   if (comments.some(comment => !changedFiles.has(comment.file))) {
     throw new Error('Business-rule finding references a file outside the PR diff');
