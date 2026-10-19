@@ -4,23 +4,28 @@ const mongoClient   = require('./mongodb-client');
 const bizAgent      = require('./agents/business-logic-agent');
 const aggregator    = require('./agents/aggregator');
 const { MODEL }     = require('./agents/llm-client');
+const { extractIssueKeys } = require('./jira-reference');
 
 const JIRA_PROJECT_KEY = process.env.JIRA_PROJECT_KEY || 'SALA';
 
-async function run({ owner, repo, prNumber, headSha }) {
+async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
   console.log(`[orchestrator] PR #${prNumber} — ${owner}/${repo}`);
   const startTime = Date.now();
+  const jiraIssueKeys = extractIssueKeys(prDescription);
+  const rulesSource = jiraIssueKeys.length ? 'pr_description' : 'project_label';
+  console.log(`[orchestrator] Jira context: ${jiraIssueKeys.length ? jiraIssueKeys.join(', ') : JIRA_PROJECT_KEY + ' / business-rule'}`);
 
-  const [diff, businessRules] = await Promise.all([
+  const [diff, context] = await Promise.all([
     githubClient.getDiff(owner, repo, prNumber),
-    mcpClient.getBusinessRules(JIRA_PROJECT_KEY),
+    mcpClient.getBusinessContext(JIRA_PROJECT_KEY, jiraIssueKeys),
   ]);
 
   const diffText = diff
     .map(f => `### ${f.filename}\n${f.patch}`)
     .join('\n\n');
 
-  const bizRes = await bizAgent.analyze(diffText, businessRules);
+  console.log(`[orchestrator] MCP ${context.mcp.transport} / ${context.mcp.protocol_version}: ${context.issue_keys.join(', ')}`);
+  const bizRes = await bizAgent.analyze(diffText, context.businessRules);
 
   const totalTokens = {
     prompt: bizRes.tokens?.prompt ?? 0,
@@ -44,6 +49,9 @@ async function run({ owner, repo, prNumber, headSha }) {
     sha:         headSha,
     model:       MODEL,
     agents:      ['business_logic'],
+    jira_issue_keys: jiraIssueKeys,
+    rules_source: rulesSource,
+    business_context: context,
     comments,
     tokens:      totalTokens,
     duration_ms: Date.now() - startTime,

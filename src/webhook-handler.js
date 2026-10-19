@@ -4,12 +4,13 @@ const orchestrator = require('./orchestrator');
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET;
 
 function verifySignature(rawBody, signature) {
-  if (!signature) return false;
-  const expected = `sha256=${crypto
+  if (typeof signature !== 'string' || !/^sha256=[a-f0-9]{64}$/i.test(signature) ||
+      !Buffer.isBuffer(rawBody) || !WEBHOOK_SECRET) return false;
+  const expected = crypto
     .createHmac('sha256', WEBHOOK_SECRET)
     .update(rawBody)
-    .digest('hex')}`;
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+    .digest();
+  return crypto.timingSafeEqual(expected, Buffer.from(signature.slice(7), 'hex'));
 }
 
 const handle = (req, res) => {
@@ -36,6 +37,7 @@ const handle = (req, res) => {
     repo:      repository.name,
     prNumber:  pull_request.number,
     headSha:   pull_request.head.sha,
+    prDescription: pull_request.body || '',
   }).catch(err => console.error('[orchestrator] error:', err.message));
 };
 

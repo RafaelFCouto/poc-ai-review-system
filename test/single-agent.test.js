@@ -36,6 +36,7 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
   const chatCalls = [];
   const posted = [];
   const audits = [];
+  const jiraCalls = [];
   const llm = {
     ...llmClient(),
     async chat(system, user) {
@@ -52,13 +53,18 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
   };
   const orchestrator = load('orchestrator.js', {
     './github-client': github,
-    './mcp-client': { async getBusinessRules() { return rules; } },
+    './mcp-client': { async getBusinessContext(...args) {
+      jiraCalls.push(args);
+      return { businessRules: rules, rules: [], issue_keys: args[1], retrieved_at: 'offline',
+        mcp: { transport: 'stdio', protocol_version: 'offline-test' } };
+    } },
+    './jira-reference': load('jira-reference.js'),
     './mongodb-client': { async saveAuditLog(log) { audits.push(log); } },
     './agents/business-logic-agent': agent,
     './agents/aggregator': load('agents/aggregator.js'),
     './agents/llm-client': llm,
   });
-  return { orchestrator, agent, chatCalls, posted, audits };
+  return { orchestrator, agent, chatCalls, posted, audits, jiraCalls };
 }
 const pr = { owner: 'owner', repo: 'api', prNumber: 12, headSha: 'test-sha' };
 
@@ -78,6 +84,26 @@ test('review makes one LLM call and audits only the business agent and its token
   assert.deepEqual(normalize(context.audits[0].tokens), { prompt: 11, output: 7, total: 18 });
   assert.equal(context.audits[0].model, 'offline-model');
   assert.equal(context.audits[0].sha, 'test-sha');
+  assert.equal(context.audits[0].rules_source, 'project_label');
+  assert.equal(context.audits[0].jira_issue_keys.length, 0);
+});
+
+test('PR description selects explicit Jira tasks and records the references', async () => {
+  const context = review();
+  await context.orchestrator.run({ ...pr, prDescription: 'Resumo da alteração.\nJira: TCC-9, TCC-5\n' });
+  assert.deepEqual(normalize(context.jiraCalls[0]), ['SALA', ['TCC-9', 'TCC-5']]);
+  assert.deepEqual(normalize(context.audits[0].jira_issue_keys), ['TCC-9', 'TCC-5']);
+  assert.equal(context.audits[0].rules_source, 'pr_description');
+  assert.equal(context.audits[0].business_context.businessRules, 'RN-01: regra explícita de negócio.');
+  assert.equal(context.audits[0].business_context.mcp.transport, 'stdio');
+});
+
+test('invalid explicit Jira reference stops before lookup, model and publication', async () => {
+  const context = review();
+  await assert.rejects(() => context.orchestrator.run({ ...pr, prDescription: 'Jira: incorrect' }), /Invalid Jira reference/);
+  assert.equal(context.jiraCalls.length, 0);
+  assert.equal(context.chatCalls.length, 0);
+  assert.equal(context.posted.length, 0);
 });
 
 test('valid empty output is audited as zero findings', async () => {
