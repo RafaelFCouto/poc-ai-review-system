@@ -23,7 +23,7 @@ Analyze the provided code diff against the business rules listed below. Identify
 Return a JSON array. Each item must have:
 - `file`: filename from the diff (string)
 - `line`: approximate line number in the diff (integer)
-- `rule_id`: the exact Jira issue key that identifies the violated rule in the supplied context (e.g., TCC-5). Do not replace it with an RN alias mentioned inside the description or invent an identifier (string)
+- `rule_id`: the exact business-rule identifier in the supplied context (e.g., RN-01). Jira issue keys such as TCC-5 identify the source task, not the rule; never use them as rule_id. Never invent an RN or infer a violation merely from a code comment mentioning an RN (string)
 - `body`: explain the expected behavior from that rule, quote the relevant expression or describe the missing check visible in the diff, explain the consequence and suggest what the code should do instead. Include the rule identifier and **write in Brazilian Portuguese** (string)
 - `severity`: "high", "medium", or "low" (string)
 

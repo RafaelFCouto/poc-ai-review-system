@@ -37,7 +37,9 @@ O único agente é `src/agents/business-logic-agent.js`, com instruções em `sr
 
 O agente recebe apenas o diff e as regras de negócio recuperadas. Convenções de estilo em `.review-config/standards.md` não são consultadas. As instruções exigem vínculo com uma regra explícita e evidência no diff, sem criar políticas ou tratar sugestões genéricas como violações de negócio.
 
-Cada achado contém `file`, `line`, `rule_id`, `body`, `severity` e a identificação `agent: business_logic`. A explicação é solicitada em português brasileiro. A identificação da regra é apresentada no comentário publicado.
+Cada achado contém `file`, `line`, `rule_id`, `body`, `severity` e a identificação `agent: business_logic`. A explicação é solicitada em português brasileiro. `rule_id` identifica a regra como `RN-01` a `RN-07`, não a task Jira. O comentário destaca a RN e seu título; o link continua apontando à fonte no Jira. A auditoria guarda também `jira_issue_key`.
+
+O catálogo `src/business-rules.json` relaciona as sete RNs da API às tasks. Ele corresponde a `docs/business-rules.json` da API; ambos devem ser atualizados juntos quando esse vínculo mudar. O catálogo fornece identidade e título, enquanto o conteúdo detalhado continua sendo recuperado via MCP/Jira. Somente as RNs cujas tasks foram efetivamente recuperadas entram no contexto enviado ao modelo. Tasks sem mapeamento e achados que citam uma task em lugar da RN, uma RN inexistente ou uma RN não consultada interrompem a revisão antes da publicação. Essa validação estrutural não comprova a correção semântica do achado.
 
 A consolidação remove apenas repetições exatas de arquivo, linha, regra e explicação, e ordena por severidade. É um procedimento determinístico; não há LLM-as-a-Judge nem comparação entre modelos.
 
