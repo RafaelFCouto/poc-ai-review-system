@@ -32,6 +32,7 @@ function formatBody(comment) {
     `> 🤖 **AI Code Review** — ${AGENT_LABEL} | Rule: \`${comment.rule_id}\` | Severity: ${severity} | Model: \`${LLM_MODEL()}\``,
     '',
     `**Regra de negócio violada:** ${comment.rule_id}${comment.rule_summary ? ` — ${comment.rule_summary}` : ''}`,
+    ...(comment.jira_issue_key ? [`**Task Jira:** ${comment.rule_source ? `[${comment.jira_issue_key}](${comment.rule_source})` : comment.jira_issue_key}`] : []),
     '',
     comment.body,
   ].join('\n');
