@@ -1,9 +1,0 @@
-[
-  { "id": "RN-01", "jira_key": "TCC-5", "title": "Impedir sobreposição de horários na mesma sala, permitindo reservas adjacentes" },
-  { "id": "RN-02", "jira_key": "TCC-3", "title": "Exigir antecedência mínima de 24 horas para criar reservas" },
-  { "id": "RN-03", "jira_key": "TCC-6", "title": "Limitar reservas de estudantes a 4 horas, sem esse limite para professores e coordenadores" },
-  { "id": "RN-04", "jira_key": "TCC-7", "title": "Limitar estudantes a uma reserva ativa" },
-  { "id": "RN-05", "jira_key": "TCC-8", "title": "Permitir cancelamento somente de reservas PENDING" },
-  { "id": "RN-06", "jira_key": "TCC-9", "title": "Bloquear reserva, confirmação e listagem de salas em manutenção" },
-  { "id": "RN-07", "jira_key": "TCC-10", "title": "Restringir cadastro de salas a professores e coordenadores e exigir capacidade inteira positiva" }
-]

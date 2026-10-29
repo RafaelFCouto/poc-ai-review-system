@@ -16,6 +16,14 @@ async function getDiff(owner, repo, prNumber) {
   }));
 }
 
+async function getRulesDocument(owner, repo, ref) {
+  const { data } = await octokit.repos.getContent({ owner, repo, path: 'docs/regras_negocio.md', ref });
+  if (!data || Array.isArray(data) || data.type !== 'file' || data.encoding !== 'base64' || !data.content) {
+    throw new Error('Business-rule document is unavailable or invalid');
+  }
+  return Buffer.from(data.content, 'base64').toString('utf8');
+}
+
 const AGENT_LABEL = '📋 Business Rules';
 
 const SEVERITY_LABEL = {
@@ -61,4 +69,4 @@ async function postReviewComment(owner, repo, prNumber, headSha, comments) {
   }
 }
 
-module.exports = { getDiff, postReviewComment };
+module.exports = { getDiff, getRulesDocument, postReviewComment };

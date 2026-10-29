@@ -23,7 +23,7 @@ test('real MCP initialization, discovery and tool call over stdio', { timeout: 1
 
 test('orchestrator retrieves context over real MCP and audits the context used by its agent', { timeout: 15000 }, async () => {
   const root = path.join(__dirname, '../../src');
-  const finding = { file: 'src/service.js', line: 1, rule_id: 'RN-06',
+  const finding = { file: 'src/service.js', line: 1, rule_id: 'RN-06', jira_issue_key: 'TCC-9',
     body: 'RN-06: a regra exige bloquear a sala em manutenção.', severity: 'high' };
   let prompt;
   let audit;
@@ -46,12 +46,12 @@ test('orchestrator retrieves context over real MCP and audits the context used b
   const orchestrator = load('orchestrator.js', {
     './github-client': {
       async getDiff() { return [{ filename: finding.file, patch: '+changed code' }]; },
+      async getRulesDocument() { return '## RN-06 — Salas em manutenção\n\n**Jira:** TCC-9'; },
       async postReviewComment(...args) { published = args[4]; },
     },
     './mcp-client': client,
     './mongodb-client': { async saveAuditLog(log) { audit = log; } },
     './jira-reference': require('../../src/jira-reference'),
-    './business-rules.json': require('../../src/business-rules.json'),
     './agents/business-logic-agent': agent,
     './agents/llm-client': llm,
     './agents/aggregator': require('../../src/agents/aggregator'),
@@ -64,7 +64,7 @@ test('orchestrator retrieves context over real MCP and audits the context used b
   assert.equal(audit.jira_issue_keys[0], 'TCC-9');
   assert.equal(published[0].rule_id, 'RN-06');
   assert.equal(published[0].jira_issue_key, 'TCC-9');
-  assert.equal(published[0].rule_summary, audit.business_context.rules[0].title);
+  assert.equal(published[0].rule_summary, audit.business_context.rules[0].summary);
   assert.equal(published[0].rule_source, audit.business_context.rules[0].source);
   assert.equal(audit.agents[0], 'business_logic');
 });

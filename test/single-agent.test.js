@@ -8,7 +8,7 @@ const sourceRoot = path.join(__dirname, '..', 'src');
 const quiet = { log() {}, error() {} };
 const normalize = value => JSON.parse(JSON.stringify(value));
 const finding = changes => ({
-  file: 'src/service.js', line: 3, rule_id: 'RN-01',
+  file: 'src/service.js', line: 3, rule_id: 'RN-01', jira_issue_key: 'TCC-5',
   body: 'RN-01: a condição permite o comportamento proibido pela regra.',
   severity: 'high', ...changes,
 });
@@ -32,7 +32,7 @@ function llmClient() {
   return load('agents/llm-client.js', { openai: { default: class {} } }, { GROQ_MODEL: 'offline-model' });
 }
 
-function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra explícita de negócio.', ruleKey = 'TCC-5', llmError } = {}) {
+function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra explícita de negócio.', ruleKey = 'TCC-5', rulesDocument = '## RN-01 — Regra de teste\n\n**Jira:** TCC-5', llmError } = {}) {
   const chatCalls = [];
   const posted = [];
   const audits = [];
@@ -48,6 +48,7 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
   const agent = load('agents/business-logic-agent.js', { fs, path, './llm-client': llm });
   const github = {
     async getDiff() { return [{ filename: 'src/service.js', patch: '@@ -1 +1 @@\n+changed code' }]; },
+    async getRulesDocument() { return rulesDocument; },
     async getStandards() { assert.fail('Coding standards must not be retrieved'); },
     async postReviewComment(...args) { posted.push(args); },
   };
@@ -59,7 +60,6 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
         mcp: { transport: 'stdio', protocol_version: 'offline-test' } };
     } },
     './jira-reference': load('jira-reference.js'),
-    './business-rules.json': require('../src/business-rules.json'),
     './mongodb-client': { async saveAuditLog(log) { audits.push(log); } },
     './agents/business-logic-agent': agent,
     './agents/aggregator': load('agents/aggregator.js'),
@@ -80,7 +80,7 @@ test('review makes one LLM call and audits only the business agent and its token
   assert.deepEqual(normalize(context.posted[0].slice(0, 4)), ['owner', 'api', 12, 'test-sha']);
   assert.equal(context.posted[0][4][0].agent, 'business_logic');
   assert.equal(context.posted[0][4][0].rule_id, 'RN-01');
-  assert.equal(context.posted[0][4][0].rule_summary, require('../src/business-rules.json')[0].title);
+  assert.equal(context.posted[0][4][0].rule_summary, 'Regra de teste');
   assert.equal(context.posted[0][4][0].rule_source, 'https://example.atlassian.net/browse/TCC-5');
   assert.equal(context.posted[0][4][0].jira_issue_key, 'TCC-5');
   assert.equal(context.audits.length, 1);
@@ -154,37 +154,37 @@ test('a finding outside the changed files stops publication', async () => {
   assert.equal(context.audits.length, 0);
 });
 
-test('only RNs in the retrieved context are accepted, never Jira task keys or unloaded RNs', async () => {
+test('only RN identifiers present in the PRD are accepted', async () => {
   for (const rule_id of ['TCC-5', 'RN-06', 'RN-99']) {
     const context = review({ text: JSON.stringify([finding({ rule_id })]) });
-    await assert.rejects(() => context.orchestrator.run(pr), /outside the Jira context/);
+    await assert.rejects(() => context.orchestrator.run(pr), /outside the supplied context/);
     assert.equal(context.posted.length, 0);
     assert.equal(context.audits.length, 0);
   }
 });
 
-test('unmapped Jira task fails before the model instead of inventing an RN', async () => {
-  const context = review({ ruleKey: 'TCC-999' });
-  await assert.rejects(() => context.orchestrator.run(pr), /no RN mapping/);
-  assert.equal(context.chatCalls.length, 0);
+test('a finding citing a task not retrieved from Jira is rejected', async () => {
+  const context = review({ text: JSON.stringify([finding({ jira_issue_key: 'TCC-999' })]) });
+  await assert.rejects(() => context.orchestrator.run(pr), /outside the supplied context/);
+  assert.equal(context.chatCalls.length, 1);
   assert.equal(context.posted.length, 0);
 });
 
-test('the seven API rules keep their RN identity through prompt, publication and audit', async () => {
+test('the agent associates RN and Jira task from the supplied PRD and Jira context', async () => {
   const mapping = [['RN-01', 'TCC-5'], ['RN-02', 'TCC-3'], ['RN-03', 'TCC-6'],
     ['RN-04', 'TCC-7'], ['RN-05', 'TCC-8'], ['RN-06', 'TCC-9'], ['RN-07', 'TCC-10']];
   for (const [rule_id, ruleKey] of mapping) {
-    const context = review({ ruleKey, text: JSON.stringify([finding({ rule_id })]) });
+    const context = review({ ruleKey, rulesDocument: `## ${rule_id} — Regra de teste\n\n**Jira:** ${ruleKey}`, text: JSON.stringify([finding({ rule_id, jira_issue_key: ruleKey })]) });
     await context.orchestrator.run(pr);
-    assert.ok(context.chatCalls[0].system.includes(rule_id + ':'));
+    assert.ok(context.chatCalls[0].system.includes(`## ${rule_id} — Regra de teste`));
     assert.equal(context.posted[0][4][0].rule_id, rule_id);
     assert.equal(context.audits[0].comments[0].jira_issue_key, ruleKey);
-    assert.equal(context.audits[0].business_context.rules[0].id, rule_id);
+    assert.equal(context.audits[0].business_context.rules[0].key, ruleKey);
   }
 });
 
 test('malformed findings fail before publication', async () => {
-  for (const invalid of [null, [], finding({ rule_id: undefined }), finding({ rule_id: ' ' }),
+  for (const invalid of [null, [], finding({ rule_id: undefined }), finding({ rule_id: ' ' }), finding({ jira_issue_key: undefined }),
     finding({ file: '' }), finding({ line: 0 }), finding({ line: 1.5 }),
     finding({ body: '' }), finding({ severity: 'critical' })]) {
     const context = review({ text: JSON.stringify([invalid]) });
@@ -232,8 +232,13 @@ test('orchestrator deduplicates repeated model findings before publishing and au
 function githubClient({ inlineFailure = false } = {}) {
   const inline = [];
   const general = [];
+  const documentRequests = [];
   class Octokit {
     constructor() {
+      this.repos = { async getContent(request) {
+        documentRequests.push(request);
+        return { data: { type: 'file', encoding: 'base64', content: Buffer.from('## RN-01 — Regra de teste').toString('base64') } };
+      } };
       this.pulls = { async createReviewComment(data) {
         inline.push(data);
         if (inlineFailure) throw new Error('Simulated inline publication failure');
@@ -241,8 +246,14 @@ function githubClient({ inlineFailure = false } = {}) {
       this.issues = { async createComment(data) { general.push(data); } };
     }
   }
-  return { client: load('github-client.js', { '@octokit/rest': { Octokit } }, { GROQ_MODEL: 'offline-model' }), inline, general };
+  return { client: load('github-client.js', { '@octokit/rest': { Octokit } }, { GROQ_MODEL: 'offline-model' }), inline, general, documentRequests };
 }
+
+test('PRD is read from the PR head revision', async () => {
+  const context = githubClient();
+  assert.equal(await context.client.getRulesDocument('owner', 'api', 'test-sha'), '## RN-01 — Regra de teste');
+  assert.deepEqual(normalize(context.documentRequests), [{ owner: 'owner', repo: 'api', path: 'docs/regras_negocio.md', ref: 'test-sha' }]);
+});
 
 test('GitHub comment identifies the business rule, single scope and model', async () => {
   const context = githubClient();
