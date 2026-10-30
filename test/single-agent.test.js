@@ -52,7 +52,7 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
     async getStandards() { assert.fail('Coding standards must not be retrieved'); },
     async postReviewComment(...args) {
       posted.push(args);
-      return { state: args[4].length ? 'CHANGES_REQUESTED' : null, id: args[4].length ? 123 : null };
+      return { state: args[4].length ? 'CHANGES_REQUESTED' : 'APPROVED', id: 123 };
     },
   };
   const orchestrator = load('orchestrator.js', {
@@ -120,7 +120,7 @@ test('valid empty output is audited as zero findings', async () => {
   assert.equal(context.chatCalls.length, 1);
   assert.equal(context.posted[0][4].length, 0);
   assert.equal(context.audits[0].comments.length, 0);
-  assert.deepEqual(normalize(context.audits[0].review), { state: null, id: null });
+  assert.deepEqual(normalize(context.audits[0].review), { state: 'APPROVED', id: 123 });
 });
 
 test('empty rule context stops review before calling the model or publishing', async () => {
@@ -272,13 +272,15 @@ test('findings request changes once after comments are published', async () => {
   assert.match(context.reviews[0].body, /2 achado/);
 });
 
-test('an empty review posts no comments and requests no changes', async () => {
+test('an empty review posts no comments and approves with a limited claim', async () => {
   const context = githubClient();
   const result = await context.client.postReviewComment('owner', 'api', 12, 'test-sha', []);
-  assert.deepEqual(normalize(result), { state: null, id: null });
+  assert.deepEqual(normalize(result), { state: 'APPROVED', id: 456 });
   assert.equal(context.inline.length, 0);
   assert.equal(context.general.length, 0);
-  assert.equal(context.reviews.length, 0);
+  assert.equal(context.reviews.length, 1);
+  assert.equal(context.reviews[0].event, 'APPROVE');
+  assert.match(context.reviews[0].body, /não substitui uma revisão humana/);
 });
 
 test('PRD is read from the PR head revision', async () => {

@@ -47,8 +47,6 @@ function formatBody(comment) {
 }
 
 async function postReviewComment(owner, repo, prNumber, headSha, comments) {
-  if (comments.length === 0) return { state: null, id: null };
-
   for (const comment of comments) {
     try {
       await octokit.pulls.createReviewComment({
@@ -75,10 +73,12 @@ async function postReviewComment(owner, repo, prNumber, headSha, comments) {
     repo,
     pull_number: prNumber,
     commit_id: headSha,
-    event: 'REQUEST_CHANGES',
-    body: `Foram encontrados ${comments.length} achado(s) de regras de negócio. Consulte os comentários desta revisão para corrigir os pontos identificados.`,
+    event: comments.length ? 'REQUEST_CHANGES' : 'APPROVE',
+    body: comments.length
+      ? `Foram encontrados ${comments.length} achado(s) de regras de negócio. Consulte os comentários desta revisão para corrigir os pontos identificados.`
+      : 'Nenhuma violação de regra de negócio foi identificada nesta análise automatizada. Esta aprovação não substitui uma revisão humana.',
   });
-  return { state: 'CHANGES_REQUESTED', id: review?.id ?? null };
+  return { state: comments.length ? 'CHANGES_REQUESTED' : 'APPROVED', id: review?.id ?? null };
 }
 
 module.exports = { getDiff, getRulesDocument, postReviewComment };
