@@ -11,6 +11,13 @@ test('explicit Jira field accepts multiple keys and normalizes case and duplicat
   assert.deepEqual(reference.extractIssueKeys('Descrição com TCC-3 no texto.\nJira: tcc-9, TCC-5, TCC-9\n'), ['TCC-9', 'TCC-5']);
 });
 
+test('task label with a short summary selects only the stated Jira issue', () => {
+  assert.deepEqual(reference.extractIssueKeys('Task no Jira: TCC-5 — Adiciona o endpoint de criação de reservas.'), ['TCC-5']);
+  assert.deepEqual(reference.extractIssueKeys('- **Task no Jira:** TCC-5 — Criação\n- **Task no Jira:** TCC-3 — Antecedência'), ['TCC-5', 'TCC-3']);
+  assert.deepEqual(reference.extractIssueKeys('Task no Jira: TCC-5, TCC-3, TCC-6, TCC-7, TCC-9\nAdiciona o endpoint de criação de reservas.'),
+    ['TCC-5', 'TCC-3', 'TCC-6', 'TCC-7', 'TCC-9']);
+});
+
 test('unmarked mentions and missing descriptions retain project context', () => {
   for (const body of [null, undefined, '', 'Relacionada a TCC-9', 'NotJira: TCC-9']) {
     assert.deepEqual(reference.extractIssueKeys(body), []);

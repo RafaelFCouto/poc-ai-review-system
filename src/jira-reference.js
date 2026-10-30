@@ -17,9 +17,9 @@ function normalizeIssueKeys(keys) {
 function extractIssueKeys(description = '') {
   if (description === null) return [];
   if (typeof description !== 'string') throw new Error('PR description must be a string');
-  const matches = [...description.matchAll(/^\s*Jira:[ \t]*(.*)$/gim)];
+  const matches = [...description.matchAll(/^\s*(?:[-*]\s*)?(?:\*\*)?(?:Jira|Task no Jira):(?:\*\*)?[ \t]*(.*)$/gim)];
   if (matches.length === 0) return [];
-  return normalizeIssueKeys(matches.flatMap(match => match[1].split(',')));
+  return normalizeIssueKeys(matches.flatMap(match => match[1].split(/\s+[—–-]\s+/, 1)[0].split(',')));
 }
 
 module.exports = { extractIssueKeys, normalizeIssueKeys };

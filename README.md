@@ -57,9 +57,11 @@ Para várias tarefas, separar as chaves por vírgulas:
 Jira: TCC-5, TCC-3
 ```
 
+Também são aceitas linhas como `Task no Jira: TCC-5 — Adiciona o endpoint de criação de reservas.` e `- **Task no Jira:** TCC-5 — Adiciona o endpoint de criação de reservas.`. O resumo após o travessão não é enviado como chave; o conteúdo da task é buscado no Jira.
+
 O webhook encaminha a descrição para o orquestrador. O serviço solicita ao servidor MCP somente as tarefas indicadas; o provedor desse servidor consulta o Jira e retorna títulos e descrições ao agente. Nesse modo, a chave identifica o projeto e não é exigida a label `business-rule`. Aceitam-se até 20 chaves distintas; maiúsculas/minúsculas são normalizadas e repetições são removidas.
 
-Sem a linha `Jira:`, permanece a busca por até 20 regras com label `business-rule` no projeto `JIRA_PROJECT_KEY`. Se a linha for preenchida com um valor inválido ou alguma tarefa selecionada não for retornada pelo Jira, a revisão falha sem substituir silenciosamente a seleção por todas as regras.
+Sem uma linha explícita `Jira:` ou `Task no Jira:`, permanece a busca por até 20 regras com label `business-rule` no projeto `JIRA_PROJECT_KEY`. Se a linha for preenchida com um valor inválido ou alguma tarefa selecionada não for retornada pelo Jira, a revisão falha sem substituir silenciosamente a seleção por todas as regras.
 
 O workflow atual dispara ao abrir a PR ou enviar um novo commit. Editar apenas a descrição não dispara outra execução. Preencher o campo antes da abertura ou, depois de corrigir a descrição, enviar um novo commit para que o evento atualizado seja recebido.
 
