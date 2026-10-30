@@ -96,6 +96,20 @@ test('review makes one LLM call and audits only the business agent and its token
   assert.equal(context.audits[0].jira_issue_keys.length, 0);
 });
 
+test('model input omits PRD introduction while retaining every RN section, Jira task and diff', async () => {
+  const rulesDocument = '# Introdução longa sem requisitos\n\n' + 'Contexto geral repetido. '.repeat(100)
+    + '\n## RN-01 — Primeira regra\nTexto da primeira regra.\n## RN-02 — Segunda regra\nTexto da segunda regra.';
+  const context = review({ rulesDocument, rules: 'TCC-5: descrição integral da task.' });
+  await context.orchestrator.run(pr);
+  const [{ system, user }] = context.chatCalls;
+  assert.doesNotMatch(system, /Contexto geral repetido/);
+  assert.match(system, /RN-01 — Primeira regra/);
+  assert.match(system, /RN-02 — Segunda regra/);
+  assert.match(system, /TCC-5: descrição integral da task/);
+  assert.match(user, /\+changed code/);
+  assert.equal(context.audits[0].business_context.rules_document, rulesDocument);
+});
+
 test('PR description selects explicit Jira tasks and records the references', async () => {
   const context = review();
   await context.orchestrator.run({ ...pr, prDescription: 'Resumo da alteração.\nJira: TCC-9, TCC-5\n' });

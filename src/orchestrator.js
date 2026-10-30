@@ -30,9 +30,13 @@ async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
   const diffText = diff
     .map(f => `### ${f.filename}\n${f.patch}`)
     .join('\n\n');
+  const firstRule = rulesDocument.search(/^## RN-\d+\b/m);
+  const rulesForReview = firstRule >= 0 ? rulesDocument.slice(firstRule).trim() : rulesDocument;
+  const reviewContext = `## PRD: docs/regras_negocio.md\n${rulesForReview}\n\n## Jira tasks\n${retrievedContext.businessRules}`;
 
   console.log(`[orchestrator] MCP ${context.mcp.transport} / ${context.mcp.protocol_version}: ${context.issue_keys.join(', ')}`);
-  const bizRes = await bizAgent.analyze(diffText, context.businessRules);
+  console.log(`[orchestrator] Review input chars — PRD: ${rulesForReview.length}, Jira: ${retrievedContext.businessRules.length}, diff: ${diffText.length}`);
+  const bizRes = await bizAgent.analyze(diffText, reviewContext);
 
   const totalTokens = {
     prompt: bizRes.tokens?.prompt ?? 0,
