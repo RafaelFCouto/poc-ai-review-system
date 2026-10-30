@@ -18,11 +18,12 @@ async function analyze(diff, businessRules) {
         typeof c.rule_id !== 'string' || !c.rule_id.trim() ||
         typeof c.jira_issue_key !== 'string' || !c.jira_issue_key.trim() ||
         typeof c.body !== 'string' || !c.body.trim() ||
+        (c.suggested_code !== undefined && c.suggested_code !== null && typeof c.suggested_code !== 'string') ||
         !['high', 'medium', 'low'].includes(c.severity)) {
       throw new Error('Invalid business-rule finding: expected file, line, rule_id, jira_issue_key, body and severity');
     }
     return { file: c.file, line: c.line, rule_id: c.rule_id, jira_issue_key: c.jira_issue_key, body: c.body,
-      severity: c.severity, agent: 'business_logic' };
+      suggested_code: c.suggested_code?.trim() || null, severity: c.severity, agent: 'business_logic' };
   });
   return { comments, tokens };
 }

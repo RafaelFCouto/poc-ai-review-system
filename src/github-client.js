@@ -36,6 +36,10 @@ const LLM_MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
 function formatBody(comment) {
   const severity = SEVERITY_LABEL[comment.severity]  || comment.severity;
+  const code = comment.suggested_code?.trim();
+  const fenceLength = Math.max(3, ...[...(code || '').matchAll(/`+/g)].map(match => match[0].length + 1));
+  const fence = '`'.repeat(fenceLength);
+  const language = /\.tsx?$/.test(comment.file) ? 'ts' : /\.jsx?$/.test(comment.file) ? 'js' : '';
   return [
     `> 🤖 **AI Code Review** — ${AGENT_LABEL} | Rule: \`${comment.rule_id}\` | Severity: ${severity} | Model: \`${LLM_MODEL()}\``,
     '',
@@ -43,6 +47,7 @@ function formatBody(comment) {
     ...(comment.jira_issue_key ? [`**Task Jira:** ${comment.rule_source ? `[${comment.jira_issue_key}](${comment.rule_source})` : comment.jira_issue_key}`] : []),
     '',
     comment.body,
+    ...(code ? ['', '**Sugestão de código:**', `${fence}${language}`, code, fence] : []),
   ].join('\n');
 }
 

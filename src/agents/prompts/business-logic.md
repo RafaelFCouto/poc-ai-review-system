@@ -26,6 +26,7 @@ Return a JSON array. Each item must have:
 - `rule_id`: infer the applicable RN identifier from the PRD and the Jira task (e.g., RN-01). Do not use the Jira key as the rule identifier or infer a violation merely from a code comment mentioning an RN (string)
 - `jira_issue_key`: the exact key of the supplied Jira task that supports this finding (e.g., TCC-5). Associate it with the RN using the PRD and task content; never invent a task (string)
 - `body`: explain the expected behavior from that rule, quote the relevant expression or describe the missing check visible in the diff, explain the consequence and suggest what the code should do instead. Include the RN identifier as the requirement reference. You may also cite its corresponding Jira task from the supplied context, without replacing the RN identifier. **Write in Brazilian Portuguese** (string)
+- `suggested_code`: a short, concrete code snippet showing how to enforce the rule using names and APIs visible in the diff. Put code here rather than in `body`. If the available context cannot support a reliable snippet, use `null`; never invent helpers, fields or APIs (string or null)
 - `severity`: "high", "medium", or "low" (string)
 
 If no violations are found, return an empty array `[]`.

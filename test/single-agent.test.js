@@ -188,8 +188,17 @@ test('the agent associates RN and Jira task from the supplied PRD and Jira conte
   }
 });
 
+test('a concrete code suggestion survives parsing, publication and audit', async () => {
+  const suggested_code = "if (startTime < existing.endTime && endTime > existing.startTime) {\n  throw new Error('Conflito de horário');\n}";
+  const context = review({ text: JSON.stringify([finding({ suggested_code })]) });
+  await context.orchestrator.run(pr);
+  assert.equal(context.posted[0][4][0].suggested_code, suggested_code);
+  assert.equal(context.audits[0].comments[0].suggested_code, suggested_code);
+  assert.match(context.chatCalls[0].system, /`suggested_code`/);
+});
+
 test('malformed findings fail before publication', async () => {
-  for (const invalid of [null, [], finding({ rule_id: undefined }), finding({ rule_id: ' ' }), finding({ jira_issue_key: undefined }),
+  for (const invalid of [null, [], finding({ rule_id: undefined }), finding({ rule_id: ' ' }), finding({ jira_issue_key: undefined }), finding({ suggested_code: 123 }),
     finding({ file: '' }), finding({ line: 0 }), finding({ line: 1.5 }),
     finding({ body: '' }), finding({ severity: 'critical' })]) {
     const context = review({ text: JSON.stringify([invalid]) });
@@ -317,10 +326,12 @@ test('inline and fallback comments identify the RN and its associated Jira task'
       jira_issue_key: 'TCC-5',
       rule_source: 'https://example.atlassian.net/browse/TCC-5',
       body: 'A condicao >= bloqueia reservas adjacentes.',
+      suggested_code: 'return start < existing.end && end > existing.start;',
     })]);
     const comment = (inlineFailure ? context.general : context.inline)[0];
     assert.ok(comment.body.includes('**Regra de negócio violada:** RN-01 — Conflito de horarios'));
     assert.ok(comment.body.includes('**Task Jira:** [TCC-5](https://example.atlassian.net/browse/TCC-5)'));
     assert.ok(comment.body.includes('A condicao >= bloqueia reservas adjacentes.'));
+    assert.ok(comment.body.includes('**Sugestão de código:**\n```js\nreturn start < existing.end && end > existing.start;\n```'));
   }
 });
