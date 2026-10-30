@@ -82,7 +82,7 @@ Mapeamento encontrado no documento local `docs/regras_negocio.md` da API (o cont
 - Modelo padrão no código: `llama-3.3-70b-versatile`, substituível por `GROQ_MODEL`; temperatura `0.1`.
 - Octokit para o GitHub, HTTPS para o Jira e cliente MongoDB para auditoria.
 
-O agente envia as seções RN do PRD, o conteúdo das tasks Jira e o diff. A introdução do PRD e instruções repetidas foram retiradas do prompt para reduzir o consumo de tokens sem omitir regras ou código. O log mostra o tamanho de cada parte enviada. Uma PR excepcionalmente grande ainda pode ultrapassar o limite de tokens por minuto do plano Groq; nesse caso, a revisão falha sem publicar uma aprovação incorreta.
+O agente envia o PRD integral, o conteúdo das tasks Jira e o diff. O prompt preserva as instruções de análise e saída; foram retirados exemplos genéricos e frases repetidas pelas próprias regras. O log mostra o tamanho de cada parte enviada. Uma PR excepcionalmente grande ainda pode ultrapassar o limite de tokens por minuto do plano Groq; nesse caso, a revisão falha sem publicar uma aprovação incorreta.
 
 Esses itens descrevem o código local. A disponibilidade do modelo, o acesso às contas e o funcionamento das integrações reais ainda precisam ser verificados para a nova PoC.
 
