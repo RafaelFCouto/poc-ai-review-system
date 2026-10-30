@@ -56,7 +56,7 @@ async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
     throw new Error('Business-rule finding references a file outside the PR diff');
   }
 
-  await githubClient.postReviewComment(owner, repo, prNumber, headSha, comments);
+  const review = await githubClient.postReviewComment(owner, repo, prNumber, headSha, comments);
 
   await mongoClient.saveAuditLog({
     pr_number:   prNumber,
@@ -68,6 +68,7 @@ async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
     rules_source: rulesSource,
     business_context: context,
     comments,
+    review,
     tokens:      totalTokens,
     duration_ms: Date.now() - startTime,
   });

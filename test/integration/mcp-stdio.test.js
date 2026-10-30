@@ -47,7 +47,10 @@ test('orchestrator retrieves context over real MCP and audits the context used b
     './github-client': {
       async getDiff() { return [{ filename: finding.file, patch: '+changed code' }]; },
       async getRulesDocument() { return '## RN-06 — Salas em manutenção\n\n**Jira:** TCC-9'; },
-      async postReviewComment(...args) { published = args[4]; },
+      async postReviewComment(...args) {
+        published = args[4];
+        return { state: published.length ? 'CHANGES_REQUESTED' : null, id: published.length ? 321 : null };
+      },
     },
     './mcp-client': client,
     './mongodb-client': { async saveAuditLog(log) { audit = log; } },
@@ -67,6 +70,7 @@ test('orchestrator retrieves context over real MCP and audits the context used b
   assert.equal(published[0].rule_summary, audit.business_context.rules[0].summary);
   assert.equal(published[0].rule_source, audit.business_context.rules[0].source);
   assert.equal(audit.agents[0], 'business_logic');
+  assert.equal(audit.review.state, 'CHANGES_REQUESTED');
 });
 
 test('real MCP tool error is rejected by the client', { timeout: 15000 }, async () => {

@@ -47,6 +47,8 @@ function formatBody(comment) {
 }
 
 async function postReviewComment(owner, repo, prNumber, headSha, comments) {
+  if (comments.length === 0) return { state: null, id: null };
+
   for (const comment of comments) {
     try {
       await octokit.pulls.createReviewComment({
@@ -67,6 +69,16 @@ async function postReviewComment(owner, repo, prNumber, headSha, comments) {
       });
     }
   }
+
+  const { data: review } = await octokit.pulls.createReview({
+    owner,
+    repo,
+    pull_number: prNumber,
+    commit_id: headSha,
+    event: 'REQUEST_CHANGES',
+    body: `Foram encontrados ${comments.length} achado(s) de regras de negócio. Consulte os comentários desta revisão para corrigir os pontos identificados.`,
+  });
+  return { state: 'CHANGES_REQUESTED', id: review?.id ?? null };
 }
 
 module.exports = { getDiff, getRulesDocument, postReviewComment };

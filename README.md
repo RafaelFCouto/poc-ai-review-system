@@ -37,7 +37,7 @@ O único agente é `src/agents/business-logic-agent.js`, com instruções em `sr
 
 O agente recebe apenas o diff e as regras de negócio recuperadas. Convenções de estilo em `.review-config/standards.md` não são consultadas. As instruções exigem vínculo com uma regra explícita e evidência no diff, sem criar políticas ou tratar sugestões genéricas como violações de negócio.
 
-Cada achado contém `file`, `line`, `rule_id`, `jira_issue_key`, `body`, `severity` e a identificação `agent: business_logic`. A explicação é solicitada em português brasileiro. O agente associa a RN à task Jira usando o PRD e o contexto recuperado. O comentário destaca a RN, o resumo da task e o link para o Jira. A origem também permanece no registro interno da auditoria.
+Cada achado contém `file`, `line`, `rule_id`, `jira_issue_key`, `body`, `severity` e a identificação `agent: business_logic`. A explicação é solicitada em português brasileiro. O agente associa a RN à task Jira usando o PRD e o contexto recuperado. O comentário destaca a RN, o resumo da task e o link para o Jira. Quando há ao menos um achado, o serviço também publica uma revisão `REQUEST_CHANGES`; com zero achados, não publica comentários nem solicita mudanças. A origem e o estado da revisão permanecem no registro interno da auditoria.
 
 O serviço lê `docs/regras_negocio.md` da revisão atual da API e recupera as tasks Jira via MCP. O agente recebe ambos e identifica a RN e a task aplicáveis a cada achado, sem catálogo local de associação. Antes da publicação, o serviço verifica se a RN existe no PRD e se a task foi consultada. Essa validação estrutural não comprova a correção semântica da associação feita pelo agente.
 
@@ -120,7 +120,7 @@ Contexto de regras vazio interrompe a análise antes da chamada ao modelo. Falha
 
 As validações verificam o formato e alguns vínculos estruturais. Não comprovam que a regra citada foi interpretada corretamente ou que o achado é tecnicamente válido. Essa avaliação continua humana.
 
-Após a publicação, o registro em `poc_review.audit_logs` contém PR, repositório, SHA informado pelo evento, modelo, `agents: ["business_logic"]`, comentários, tokens somente desse agente, duração e timestamp. O campo `jira_issue_keys` registra as chaves indicadas na descrição; `rules_source` distingue `pr_description` de `project_label`. No modo por projeto, a lista de referências explícitas fica vazia, mas `business_context.issue_keys` identifica as tarefas efetivamente recuperadas. `business_context` preserva o conteúdo usado e os metadados da conexão MCP. A captura do prompt versionado, das falhas e do resultado individual de publicação permanece pendente.
+Após a publicação, o registro em `poc_review.audit_logs` contém PR, repositório, SHA informado pelo evento, modelo, `agents: ["business_logic"]`, comentários, estado e ID da revisão, tokens somente desse agente, duração e timestamp. O campo `jira_issue_keys` registra as chaves indicadas na descrição; `rules_source` distingue `pr_description` de `project_label`. No modo por projeto, a lista de referências explícitas fica vazia, mas `business_context.issue_keys` identifica as tarefas efetivamente recuperadas. `business_context` preserva o conteúdo usado e os metadados da conexão MCP. A captura do prompt versionado, das falhas e do resultado individual de publicação permanece pendente.
 
 ## Testes locais
 

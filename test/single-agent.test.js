@@ -50,7 +50,10 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
     async getDiff() { return [{ filename: 'src/service.js', patch: '@@ -1 +1 @@\n+changed code' }]; },
     async getRulesDocument() { return rulesDocument; },
     async getStandards() { assert.fail('Coding standards must not be retrieved'); },
-    async postReviewComment(...args) { posted.push(args); },
+    async postReviewComment(...args) {
+      posted.push(args);
+      return { state: args[4].length ? 'CHANGES_REQUESTED' : null, id: args[4].length ? 123 : null };
+    },
   };
   const orchestrator = load('orchestrator.js', {
     './github-client': github,
@@ -88,6 +91,7 @@ test('review makes one LLM call and audits only the business agent and its token
   assert.deepEqual(normalize(context.audits[0].tokens), { prompt: 11, output: 7, total: 18 });
   assert.equal(context.audits[0].model, 'offline-model');
   assert.equal(context.audits[0].sha, 'test-sha');
+  assert.deepEqual(normalize(context.audits[0].review), { state: 'CHANGES_REQUESTED', id: 123 });
   assert.equal(context.audits[0].rules_source, 'project_label');
   assert.equal(context.audits[0].jira_issue_keys.length, 0);
 });
@@ -116,6 +120,7 @@ test('valid empty output is audited as zero findings', async () => {
   assert.equal(context.chatCalls.length, 1);
   assert.equal(context.posted[0][4].length, 0);
   assert.equal(context.audits[0].comments.length, 0);
+  assert.deepEqual(normalize(context.audits[0].review), { state: null, id: null });
 });
 
 test('empty rule context stops review before calling the model or publishing', async () => {
@@ -232,6 +237,7 @@ test('orchestrator deduplicates repeated model findings before publishing and au
 function githubClient({ inlineFailure = false } = {}) {
   const inline = [];
   const general = [];
+  const reviews = [];
   const documentRequests = [];
   class Octokit {
     constructor() {
@@ -239,15 +245,41 @@ function githubClient({ inlineFailure = false } = {}) {
         documentRequests.push(request);
         return { data: { type: 'file', encoding: 'base64', content: Buffer.from('## RN-01 — Regra de teste').toString('base64') } };
       } };
-      this.pulls = { async createReviewComment(data) {
-        inline.push(data);
-        if (inlineFailure) throw new Error('Simulated inline publication failure');
-      } };
+      this.pulls = {
+        async createReviewComment(data) {
+          inline.push(data);
+          if (inlineFailure) throw new Error('Simulated inline publication failure');
+        },
+        async createReview(data) {
+          reviews.push(data);
+          return { data: { id: 456 } };
+        },
+      };
       this.issues = { async createComment(data) { general.push(data); } };
     }
   }
-  return { client: load('github-client.js', { '@octokit/rest': { Octokit } }, { GROQ_MODEL: 'offline-model' }), inline, general, documentRequests };
+  return { client: load('github-client.js', { '@octokit/rest': { Octokit } }, { GROQ_MODEL: 'offline-model' }), inline, general, reviews, documentRequests };
 }
+
+test('findings request changes once after comments are published', async () => {
+  const context = githubClient();
+  const result = await context.client.postReviewComment('owner', 'api', 12, 'test-sha', [finding(), finding({ line: 4 })]);
+  assert.deepEqual(normalize(result), { state: 'CHANGES_REQUESTED', id: 456 });
+  assert.equal(context.inline.length, 2);
+  assert.equal(context.reviews.length, 1);
+  assert.equal(context.reviews[0].event, 'REQUEST_CHANGES');
+  assert.equal(context.reviews[0].commit_id, 'test-sha');
+  assert.match(context.reviews[0].body, /2 achado/);
+});
+
+test('an empty review posts no comments and requests no changes', async () => {
+  const context = githubClient();
+  const result = await context.client.postReviewComment('owner', 'api', 12, 'test-sha', []);
+  assert.deepEqual(normalize(result), { state: null, id: null });
+  assert.equal(context.inline.length, 0);
+  assert.equal(context.general.length, 0);
+  assert.equal(context.reviews.length, 0);
+});
 
 test('PRD is read from the PR head revision', async () => {
   const context = githubClient();
@@ -272,6 +304,7 @@ test('general-comment fallback retains the rule and source path', async () => {
   assert.equal(context.general.length, 1);
   assert.match(context.general[0].body, /Rule: `RN-01`/);
   assert.match(context.general[0].body, /src\/service\.js/);
+  assert.equal(context.reviews[0].event, 'REQUEST_CHANGES');
 });
 
 test('inline and fallback comments identify the RN and its associated Jira task', async () => {
