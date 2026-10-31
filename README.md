@@ -132,6 +132,25 @@ Após a publicação, o registro em `poc_review.audit_logs` contém PR, reposit�
 
 ## Testes locais
 
+### Diagnóstico de respostas inválidas do modelo
+
+Em falhas de parsing (JSON inválido, conteúdo ausente ou raiz diferente de array), o serviço emite uma linha `model-response-failure` em JSON no log. Ela identifica `repo`, `pr_number`, `sha`, modelo, tokens, erro e sua causa, além de `model_response.id`, `model_response.finish_reason` e `model_response.raw_content`. O conteúdo é preservado antes de remover espaços ou cercas Markdown; o diagnóstico não tenta corrigir a saída nem repetir a inferência automaticamente.
+
+O mesmo diagnóstico é salvo em `poc_review.audit_logs` com `status: "failed"` e `stage: "parse_model_response"`, acompanhado do prompt, contexto e diff usados. Esse registro representa uma falha, não uma revisão sem achados, e não gera comentários ou aprovação no GitHub. Se a persistência falhar, o serviço mantém o diagnóstico no console e propaga o erro original. O log usa campos selecionados da resposta, sem serializar requisições do SDK, headers ou credenciais. A resposta pode conter trechos do código analisado; o registro permanece nos logs internos e na auditoria.
+
+Consulta para investigar a PR #24 no MongoDB:
+
+```javascript
+db.getSiblingDB('poc_review').audit_logs.find({
+  repo: 'RafaelFCouto/room-reservation-api',
+  pr_number: 24,
+  status: 'failed',
+  stage: 'parse_model_response'
+}).sort({ timestamp: -1 })
+```
+
+`finish_reason: "length"`, quando retornado pelo provedor, permite identificar uma resposta interrompida por limite; a contagem de tokens isolada não comprova truncamento. Os registros de revisões bem-sucedidas também incluem `model_response`, permitindo comparar a saída original com os achados publicados. Falhas anteriores ao retorno do modelo e falhas posteriores de validação dos achados não são cobertas por esse diagnóstico específico. Essas informações só estarão disponíveis para novas execuções após publicar esta alteração.
+
 ```powershell
 npm test
 ```

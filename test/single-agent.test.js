@@ -15,12 +15,12 @@ const finding = changes => ({
 });
 
 // Replace all API clients before loading modules. Tests never start the app.
-function load(file, mocks = {}, env = {}) {
+function load(file, mocks = {}, env = {}, logger = quiet) {
   const filename = path.join(sourceRoot, file);
   const module = { exports: {} };
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), {
     module, exports: module.exports, __dirname: path.dirname(filename),
-    Buffer, console: quiet, process: { env },
+    Buffer, console: logger, process: { env },
     require(name) {
       if (Object.hasOwn(mocks, name)) return mocks[name];
       throw new Error('Unexpected module loaded: ' + name);
@@ -33,17 +33,18 @@ function llmClient() {
   return load('agents/llm-client.js', { openai: { default: class {} } }, { GROQ_MODEL: 'offline-model' });
 }
 
-function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra explícita de negócio.', ruleKey = 'TCC-5', rulesDocument = '## RN-01 — Regra de teste\n\n**Jira:** TCC-5', llmError } = {}) {
+function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra explícita de negócio.', ruleKey = 'TCC-5', rulesDocument = '## RN-01 — Regra de teste\n\n**Jira:** TCC-5', llmError, auditError, responseMetadata } = {}) {
   const chatCalls = [];
   const posted = [];
   const audits = [];
   const jiraCalls = [];
+  const errors = [];
   const llm = {
     ...llmClient(),
     async chat(system, user) {
       chatCalls.push({ system, user });
       if (llmError) throw llmError;
-      return { text, tokens: { prompt: 11, output: 7, total: 18 } };
+      return { text, tokens: { prompt: 11, output: 7, total: 18 }, responseMetadata };
     },
   };
   const agent = load('agents/business-logic-agent.js', { fs, path, 'node:crypto': crypto, './llm-client': llm });
@@ -64,12 +65,12 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
         mcp: { transport: 'stdio', protocol_version: 'offline-test' } };
     } },
     './jira-reference': load('jira-reference.js'),
-    './mongodb-client': { async saveAuditLog(log) { audits.push(log); } },
+    './mongodb-client': { async saveAuditLog(log) { if (auditError) throw auditError; audits.push(log); } },
     './agents/business-logic-agent': agent,
     './agents/aggregator': load('agents/aggregator.js'),
     './agents/llm-client': llm,
-  });
-  return { orchestrator, agent, chatCalls, posted, audits, jiraCalls };
+  }, {}, { log() {}, error(message) { errors.push(message); } });
+  return { orchestrator, agent, chatCalls, posted, audits, jiraCalls, errors };
 }
 const pr = { owner: 'owner', repo: 'api', prNumber: 12, headSha: 'test-sha' };
 
@@ -95,6 +96,7 @@ test('review makes one LLM call and audits only the business agent and its token
   assert.deepEqual(normalize(context.audits[0].review), { state: 'CHANGES_REQUESTED', id: 123 });
   assert.equal(context.audits[0].rules_source, 'project_label');
   assert.equal(context.audits[0].jira_issue_keys.length, 0);
+  assert.equal(context.audits[0].model_response.raw_content, JSON.stringify([finding()]));
 });
 
 test('model input retains the PRD index and complete Jira task and diff, auditing the full PRD', async () => {
@@ -187,13 +189,83 @@ test('malformed JSON fails instead of becoming an empty review', async () => {
   const context = review({ text: 'not JSON' });
   await assert.rejects(() => context.orchestrator.run(pr), /invalid JSON response/);
   assert.equal(context.posted.length, 0);
+  assert.equal(context.audits.length, 1);
+  assert.equal(context.audits[0].status, 'failed');
+  assert.equal(context.audits[0].review, undefined);
+});
+
+test('parse failure preserves exact response, provider metadata and PR evidence without retrying', async () => {
+  const text = '  [{"body":"unfinished\n';
+  const context = review({ text, responseMetadata: { id: 'completion-123', model: 'actual-model', finish_reason: 'length' } });
+  await assert.rejects(() => context.orchestrator.run(pr), /invalid JSON response/);
+  assert.equal(context.chatCalls.length, 1);
+  assert.equal(context.posted.length, 0);
+  const audit = context.audits[0];
+  assert.equal(audit.pr_number, 12);
+  assert.equal(audit.repo, 'owner/api');
+  assert.equal(audit.sha, 'test-sha');
+  assert.equal(audit.stage, 'parse_model_response');
+  assert.equal(audit.model_response.raw_content, text);
+  assert.equal(audit.model_response.finish_reason, 'length');
+  assert.equal(audit.model_response.id, 'completion-123');
+  assert.equal(audit.model_response.model, 'actual-model');
+  assert.equal(audit.error.cause.name, 'SyntaxError');
+  assert.ok(audit.error.cause.message.length > 0);
+  assert.equal(audit.tokens.total, 18);
+  assert.match(audit.diff, /changed code/);
+  assert.equal(audit.prompt.version, 'business-logic-single-occurrence-v1');
+  assert.ok(audit.business_context.rules_document);
+  const logged = JSON.parse(context.errors[0].split('model-response-failure ')[1]);
+  assert.equal(logged.model_response.raw_content, text);
+  assert.equal(logged.pr_number, 12);
+});
+
+test('failed diagnostic persistence retains console evidence and the original parsing error', async () => {
+  const context = review({ text: 'broken', auditError: new Error('private connection details') });
+  await assert.rejects(() => context.orchestrator.run(pr), /invalid JSON response/);
+  assert.equal(context.posted.length, 0);
   assert.equal(context.audits.length, 0);
+  assert.match(context.errors[0], /"raw_content":"broken"/);
+  assert.match(context.errors[1], /failed to persist response diagnostic/);
+  assert.doesNotMatch(context.errors.join('\n'), /private connection details/);
+});
+
+test('LLM client preserves raw whitespace, null content and finish reason without changing request parameters', async () => {
+  for (const content of ['  []\r\n', null]) {
+    const requests = [];
+    class OpenAI {
+      constructor() { this.chat = { completions: { async create(request) {
+        requests.push(request);
+        return { id: 'response-1', model: 'provider-model', choices: [{ message: { content }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 } };
+      } } }; }
+    }
+    const client = load('agents/llm-client.js', { openai: { default: OpenAI } }, { GROQ_MODEL: 'offline-model' });
+    const result = await client.chat('system', 'user');
+    assert.equal(result.text, content);
+    assert.equal(result.responseMetadata.finish_reason, 'stop');
+    assert.equal(result.responseMetadata.id, 'response-1');
+    assert.equal(result.tokens.total, 7);
+    assert.deepEqual(normalize(requests), [{ model: 'offline-model', temperature: 0.1,
+      messages: [{ role: 'system', content: 'system' }, { role: 'user', content: 'user' }] }]);
+  }
+});
+
+test('null model content is recorded as a failure, never an empty successful review', async () => {
+  const context = review({ text: null, responseMetadata: { finish_reason: 'stop' } });
+  await assert.rejects(() => context.orchestrator.run(pr), /invalid JSON response/);
+  assert.equal(context.audits[0].model_response.raw_content, null);
+  assert.equal(context.audits[0].model_response.finish_reason, 'stop');
+  assert.equal(context.posted.length, 0);
 });
 
 test('non-array JSON fails instead of becoming a finding collection', async () => {
   const context = review({ text: '{}' });
   await assert.rejects(() => context.orchestrator.run(pr), /JSON array/);
   assert.equal(context.posted.length, 0);
+  assert.equal(context.audits[0].status, 'failed');
+  assert.equal(context.audits[0].model_response.raw_content, '{}');
+  assert.equal(context.audits[0].error.cause, null);
 });
 
 test('a finding outside the changed files stops publication', async () => {

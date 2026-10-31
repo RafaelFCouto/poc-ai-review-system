@@ -12,9 +12,33 @@ async function analyze(diff, businessRules) {
     throw new Error('Business-rule review requires non-empty business rules');
   }
   const system = promptBase.replace('{{BUSINESS_RULES}}', () => businessRules);
-  const { text, tokens } = await chat(system, `## Code diff to analyze\n\n${diff}`);
+  const { text, tokens, responseMetadata } = await chat(system, `## Code diff to analyze\n\n${diff}`);
+  const prompt = {
+    version: PROMPT_VERSION,
+    template_sha256: sha256(promptBase),
+    template: promptBase,
+    system_sha256: sha256(system),
+  };
+  const modelResponse = {
+    id: responseMetadata?.id ?? null,
+    model: responseMetadata?.model ?? null,
+    finish_reason: responseMetadata?.finish_reason ?? null,
+    raw_content: text,
+  };
   console.log(`[business-logic-agent] tokens — prompt: ${tokens.prompt}, output: ${tokens.output}, total: ${tokens.total}`);
-  const comments = parseJson(text, 'business-logic-agent').map(c => {
+  let parsed;
+  try {
+    parsed = parseJson(text, 'business-logic-agent');
+  } catch (error) {
+    // Carry evidence to the orchestrator, where repository/PR/SHA are known.
+    error.responseDiagnostic = { stage: 'parse_model_response',
+      model_response: modelResponse, tokens, prompt,
+      error: { name: error.name, message: error.message,
+        cause: error.cause ? { name: error.cause.name, message: error.cause.message } : null },
+    };
+    throw error;
+  }
+  const comments = parsed.map(c => {
     if (!c || typeof c !== 'object' || Array.isArray(c) ||
         typeof c.file !== 'string' || !c.file.trim() ||
         !Number.isSafeInteger(c.line) || c.line < 1 ||
@@ -28,12 +52,7 @@ async function analyze(diff, businessRules) {
     return { file: c.file, line: c.line, rule_id: c.rule_id, jira_issue_key: c.jira_issue_key, body: c.body,
       suggested_code: c.suggested_code?.trim() || null, severity: c.severity, agent: 'business_logic' };
   });
-  return { comments, tokens, prompt: {
-    version: PROMPT_VERSION,
-    template_sha256: sha256(promptBase),
-    template: promptBase,
-    system_sha256: sha256(system),
-  } };
+  return { comments, tokens, prompt, model_response: modelResponse };
 }
 
 module.exports = { analyze };

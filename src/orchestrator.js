@@ -41,7 +41,33 @@ async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
   console.log(`[orchestrator] MCP ${context.mcp.transport} / ${context.mcp.protocol_version}: ${context.issue_keys.join(', ')}`);
   console.log(`[orchestrator] Review input chars — PRD: ${rulesDocument.length}, Jira: ${retrievedContext.businessRules.length}, diff: ${diffText.length}`);
   console.log(`[orchestrator] Inference context: ${context.inference_context_version}; PRD index: ${rulesIndex.length}, rules sent: ${context.businessRules.length}; full PRD retained for audit`);
-  const bizRes = await bizAgent.analyze(diffText, context.businessRules);
+  let bizRes;
+  try {
+    bizRes = await bizAgent.analyze(diffText, context.businessRules);
+  } catch (error) {
+    if (error.responseDiagnostic) {
+      const { prompt, ...diagnostic } = error.responseDiagnostic;
+      const failure = {
+        status: 'failed', pr_number: prNumber, repo: `${owner}/${repo}`,
+        sha: headSha, model: MODEL, agents: ['business_logic'],
+        ...diagnostic, prompt, jira_issue_keys: jiraIssueKeys,
+        rules_source: rulesSource, business_context: context, diff: diffText,
+        duration_ms: Date.now() - startTime,
+      };
+      // Explicit fields only: never serialize SDK requests, headers or credentials.
+      // Log before persistence so evidence remains available if MongoDB fails.
+      console.error('[orchestrator] model-response-failure ' + JSON.stringify({
+        pr_number: prNumber, repo: failure.repo, sha: headSha, model: MODEL,
+        ...diagnostic,
+      }));
+      try {
+        await mongoClient.saveAuditLog(failure);
+      } catch (auditError) {
+        console.error(`[orchestrator] PR #${prNumber} — failed to persist response diagnostic: ${auditError.name}`);
+      }
+    }
+    throw error;
+  }
 
   const totalTokens = {
     prompt: bizRes.tokens?.prompt ?? 0,
@@ -73,6 +99,7 @@ async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
     sha:         headSha,
     model:       MODEL,
     prompt:      bizRes.prompt,
+    model_response: bizRes.model_response,
     agents:      ['business_logic'],
     jira_issue_keys: jiraIssueKeys,
     rules_source: rulesSource,

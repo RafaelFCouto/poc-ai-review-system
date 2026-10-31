@@ -23,8 +23,14 @@ async function chat(systemPrompt, userMessage) {
     total:  response.usage?.total_tokens      ?? 0,
   };
 
-  const text = response.choices[0].message.content.trim();
-  return { text, tokens };
+  const choice = response.choices?.[0];
+  // Preserve the provider's content exactly, including whitespace or null.
+  const text = choice?.message?.content ?? null;
+  return { text, tokens, responseMetadata: {
+    id: response.id ?? null,
+    model: response.model ?? MODEL,
+    finish_reason: choice?.finish_reason ?? null,
+  } };
 }
 
 function parseJson(text, agentName) {
