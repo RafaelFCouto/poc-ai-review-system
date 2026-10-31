@@ -97,19 +97,22 @@ test('review makes one LLM call and audits only the business agent and its token
   assert.equal(context.audits[0].jira_issue_keys.length, 0);
 });
 
-test('model input retains the complete PRD, Jira task and diff without generic focus examples', async () => {
+test('model input retains the PRD index and complete Jira task and diff, auditing the full PRD', async () => {
   const rulesDocument = '# Introdução longa sem requisitos\n\n' + 'Contexto geral repetido. '.repeat(100)
     + '\n## RN-01 — Primeira regra\nTexto da primeira regra.\n## RN-02 — Segunda regra\nTexto da segunda regra.';
   const context = review({ rulesDocument, rules: 'TCC-5: descrição integral da task.' });
   await context.orchestrator.run(pr);
   const [{ system, user }] = context.chatCalls;
-  assert.match(system, /Contexto geral repetido/);
+  assert.doesNotMatch(system, /Contexto geral repetido/);
+  assert.doesNotMatch(system, /Texto da primeira regra/);
+  assert.doesNotMatch(system, /Texto da segunda regra/);
   assert.match(system, /RN-01 — Primeira regra/);
   assert.match(system, /RN-02 — Segunda regra/);
   assert.match(system, /TCC-5: descrição integral da task/);
   assert.doesNotMatch(system, /Missing profile\/role checks before executing privileged operations/);
   assert.match(user, /\+changed code/);
   assert.equal(context.audits[0].business_context.rules_document, rulesDocument);
+  assert.equal(context.audits[0].business_context.inference_context_version, 'jira-full-prd-index-v1');
 });
 
 test('audit identifies the exact template and system prompt used in each review', async () => {
@@ -223,6 +226,7 @@ test('the agent associates RN and Jira task from the supplied PRD and Jira conte
     const context = review({ ruleKey, rulesDocument: `## ${rule_id} — Regra de teste\n\n**Jira:** ${ruleKey}`, text: JSON.stringify([finding({ rule_id, jira_issue_key: ruleKey })]) });
     await context.orchestrator.run(pr);
     assert.ok(context.chatCalls[0].system.includes(`## ${rule_id} — Regra de teste`));
+    assert.ok(context.chatCalls[0].system.includes(`**Jira:** ${ruleKey}`));
     assert.equal(context.posted[0][4][0].rule_id, rule_id);
     assert.equal(context.audits[0].comments[0].jira_issue_key, ruleKey);
     assert.equal(context.audits[0].business_context.rules[0].key, ruleKey);

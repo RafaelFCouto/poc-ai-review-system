@@ -24,14 +24,23 @@ async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
   if (!retrievedContext.businessRules.trim() || !rulesDocument.trim()) {
     throw new Error('Business-rule review requires non-empty business rules');
   }
+  // Jira contains the complete requirements. Send only the PRD identity index
+  // to avoid duplicating the normative text in the limited inference budget.
+  // Preserve both original sources in the audit; never truncate tasks or diff.
+  const rulesIndex = rulesDocument.split(/\r?\n/)
+    .filter(line => /^## RN-\d+\b/.test(line) || /^\*\*Jira:\*\*/.test(line))
+    .join('\n');
   const context = { ...retrievedContext, rules_document: rulesDocument,
-    businessRules: `## PRD: docs/regras_negocio.md\n${rulesDocument}\n\n## Jira tasks\n${retrievedContext.businessRules}` };
+    inference_context_version: 'jira-full-prd-index-v1',
+    rules_index: rulesIndex,
+    businessRules: `## PRD identity index: docs/regras_negocio.md\n${rulesIndex}\n\n## Jira tasks (complete requirements)\n${retrievedContext.businessRules}` };
 
   const diffText = diff
     .map(f => `### ${f.filename}\n${f.patch}`)
     .join('\n\n');
   console.log(`[orchestrator] MCP ${context.mcp.transport} / ${context.mcp.protocol_version}: ${context.issue_keys.join(', ')}`);
   console.log(`[orchestrator] Review input chars — PRD: ${rulesDocument.length}, Jira: ${retrievedContext.businessRules.length}, diff: ${diffText.length}`);
+  console.log(`[orchestrator] Inference context: ${context.inference_context_version}; PRD index: ${rulesIndex.length}, rules sent: ${context.businessRules.length}; full PRD retained for audit`);
   const bizRes = await bizAgent.analyze(diffText, context.businessRules);
 
   const totalTokens = {
