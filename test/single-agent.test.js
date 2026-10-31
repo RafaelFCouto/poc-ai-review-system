@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const crypto = require('node:crypto');
 
 const sourceRoot = path.join(__dirname, '..', 'src');
 const quiet = { log() {}, error() {} };
@@ -45,7 +46,7 @@ function review({ text = JSON.stringify([finding()]), rules = 'RN-01: regra expl
       return { text, tokens: { prompt: 11, output: 7, total: 18 } };
     },
   };
-  const agent = load('agents/business-logic-agent.js', { fs, path, './llm-client': llm });
+  const agent = load('agents/business-logic-agent.js', { fs, path, 'node:crypto': crypto, './llm-client': llm });
   const github = {
     async getDiff() { return [{ filename: 'src/service.js', patch: '@@ -1 +1 @@\n+changed code' }]; },
     async getRulesDocument() { return rulesDocument; },
@@ -109,6 +110,31 @@ test('model input retains the complete PRD, Jira task and diff without generic f
   assert.doesNotMatch(system, /Missing profile\/role checks before executing privileged operations/);
   assert.match(user, /\+changed code/);
   assert.equal(context.audits[0].business_context.rules_document, rulesDocument);
+});
+
+test('audit identifies the exact template and system prompt used in each review', async () => {
+  const first = review();
+  const second = review({ rules: 'RN-01: requisito revisado para uma nova rodada.' });
+  await first.orchestrator.run(pr);
+  await second.orchestrator.run(pr);
+  const digest = text => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+  for (const context of [first, second]) {
+    const { prompt, business_context } = context.audits[0];
+    assert.equal(prompt.version, 'business-logic-single-occurrence-v1');
+    assert.equal(prompt.template_sha256, digest(prompt.template));
+    assert.equal(prompt.system_sha256, digest(context.chatCalls[0].system));
+    assert.equal(prompt.template.replace('{{BUSINESS_RULES}}', () => business_context.businessRules), context.chatCalls[0].system);
+  }
+  assert.equal(first.audits[0].prompt.template_sha256, second.audits[0].prompt.template_sha256);
+  assert.notEqual(first.audits[0].prompt.system_sha256, second.audits[0].prompt.system_sha256);
+});
+
+test('independent occurrences of the same rule survive as separate comments, even at one location', async () => {
+  const bodies = ['RN-01: a operação A não verifica a condição exigida.', 'RN-01: a operação B não verifica a condição exigida.'];
+  const context = review({ text: JSON.stringify(bodies.map(body => finding({ body }))) });
+  await context.orchestrator.run(pr);
+  assert.deepEqual(normalize(context.posted[0][4].map(item => item.body)), bodies);
+  assert.equal(context.audits[0].comments.length, 2);
 });
 
 test('PR description selects explicit Jira tasks and records the references', async () => {

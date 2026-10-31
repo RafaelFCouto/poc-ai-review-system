@@ -35,6 +35,10 @@ O uso do SDK e o formato do código não substituem um teste do protocolo. A ver
 
 O único agente é `src/agents/business-logic-agent.js`, com instruções em `src/agents/prompts/business-logic.md`. Os agentes e prompts antigos de bugs, code smells e otimização foram retirados.
 
+O prompt `business-logic-single-occurrence-v1` solicita uma ocorrência verificável por item e, portanto, por comentário. Problemas independentes e violações em operações distintas devem ser separados, mesmo quando têm a mesma RN. Causa, consequência e correção de uma mesma ocorrência permanecem juntas; atravessar repositório e serviço não é motivo para duplicá-la. A validação do JSON é estrutural: não garante que o modelo respeite a separação semântica. Conferir essa aderência no piloto e preservar as saídas originais, inclusive desvios.
+
+A auditoria registra `prompt.version`, o texto do template, seu SHA-256 e o SHA-256 do prompt de sistema efetivamente enviado. O contexto já armazenado permite reconstruir esse prompt. Esses campos identificam a configuração da nova rodada, sem alterar retrospectivamente os registros anteriores. O template é interno e não é acrescentado aos comentários publicados.
+
 O agente recebe apenas o diff e as regras de negócio recuperadas. Convenções de estilo em `.review-config/standards.md` não são consultadas. As instruções exigem vínculo com uma regra explícita e evidência no diff, sem criar políticas ou tratar sugestões genéricas como violações de negócio.
 
 Cada achado contém `file`, `line`, `rule_id`, `jira_issue_key`, `body`, `severity`, `suggested_code` e a identificação `agent: business_logic`. A explicação é solicitada em português brasileiro. O agente associa a RN à task Jira usando o PRD e o contexto recuperado. O comentário destaca a RN, o resumo da task e o link para o Jira. Quando o diff fornece contexto suficiente, o agente inclui um snippet de código sugerido; caso contrário, `suggested_code` fica vazio e o comentário preserva a explicação do achado. Quando há ao menos um achado, o serviço também publica uma revisão `REQUEST_CHANGES`; com uma resposta válida sem achados, publica `APPROVE` com a ressalva de que a análise automatizada não substitui revisão humana. A origem e o estado da revisão permanecem no registro interno da auditoria.
@@ -124,7 +128,7 @@ Contexto de regras vazio interrompe a análise antes da chamada ao modelo. Falha
 
 As validações verificam o formato e alguns vínculos estruturais. Não comprovam que a regra citada foi interpretada corretamente ou que o achado é tecnicamente válido. Essa avaliação continua humana.
 
-Após a publicação, o registro em `poc_review.audit_logs` contém PR, repositório, SHA informado pelo evento, modelo, `agents: ["business_logic"]`, comentários, estado e ID da revisão, tokens somente desse agente, duração e timestamp. O campo `jira_issue_keys` registra as chaves indicadas na descrição; `rules_source` distingue `pr_description` de `project_label`. No modo por projeto, a lista de referências explícitas fica vazia, mas `business_context.issue_keys` identifica as tarefas efetivamente recuperadas. `business_context` preserva o conteúdo usado e os metadados da conexão MCP. A captura do prompt versionado, das falhas e do resultado individual de publicação permanece pendente.
+Após a publicação, o registro em `poc_review.audit_logs` contém PR, repositório, SHA informado pelo evento, modelo, `agents: ["business_logic"]`, comentários, estado e ID da revisão, tokens somente desse agente, duração e timestamp. O campo `jira_issue_keys` registra as chaves indicadas na descrição; `rules_source` distingue `pr_description` de `project_label`. No modo por projeto, a lista de referências explícitas fica vazia, mas `business_context.issue_keys` identifica as tarefas efetivamente recuperadas. `business_context` preserva o conteúdo usado e os metadados da conexão MCP. O prompt versionado e seus hashes ficam no campo `prompt`. A captura das falhas e do resultado individual de publicação permanece pendente.
 
 ## Testes locais
 
@@ -132,7 +136,7 @@ Após a publicação, o registro em `poc_review.audit_logs` contém PR, reposit�
 npm test
 ```
 
-Os 38 testes unitários usam as implementações de orquestração, agente, parser, consolidação, seleção de tarefas Jira, limites MCP, webhook e formatação com clientes externos simulados. Não precisam de credenciais ou rede e não iniciam o servidor. Verificam o uso de um agente, tokens e auditoria, escopo do contexto, saídas inválidas, consulta de tarefas, falhas HTTP, assinaturas, separação entre cliente e servidor e publicação simulada. Eles não comprovam o protocolo.
+Os 50 testes unitários usam as implementações de orquestração, agente, parser, consolidação, seleção de tarefas Jira, limites MCP, webhook e formatação com clientes externos simulados. Não precisam de credenciais ou rede e não iniciam o servidor. Verificam o uso de um agente, tokens e auditoria, escopo do contexto, saídas inválidas, consulta de tarefas, falhas HTTP, assinaturas, separação entre cliente e servidor e publicação simulada. Eles não comprovam o protocolo.
 
 Depois de instalar as dependências, executar separadamente:
 

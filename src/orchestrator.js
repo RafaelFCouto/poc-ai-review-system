@@ -63,6 +63,7 @@ async function run({ owner, repo, prNumber, headSha, prDescription = '' }) {
     repo:        `${owner}/${repo}`,
     sha:         headSha,
     model:       MODEL,
+    prompt:      bizRes.prompt,
     agents:      ['business_logic'],
     jira_issue_keys: jiraIssueKeys,
     rules_source: rulesSource,

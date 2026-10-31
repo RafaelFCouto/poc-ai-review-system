@@ -42,7 +42,7 @@ test('orchestrator retrieves context over real MCP and audits the context used b
     });
     return module.exports;
   }
-  const agent = load('agents/business-logic-agent.js', { fs, path, './llm-client': llm });
+  const agent = load('agents/business-logic-agent.js', { fs, path, 'node:crypto': require('node:crypto'), './llm-client': llm });
   const orchestrator = load('orchestrator.js', {
     './github-client': {
       async getDiff() { return [{ filename: finding.file, patch: '+changed code' }]; },

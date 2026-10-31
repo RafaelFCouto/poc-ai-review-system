@@ -1,8 +1,11 @@
 const fs   = require('fs');
 const path = require('path');
+const { createHash } = require('node:crypto');
 const { chat, parseJson } = require('./llm-client');
 
 const promptBase = fs.readFileSync(path.join(__dirname, 'prompts', 'business-logic.md'), 'utf8');
+const PROMPT_VERSION = 'business-logic-single-occurrence-v1';
+const sha256 = text => createHash('sha256').update(text, 'utf8').digest('hex');
 
 async function analyze(diff, businessRules) {
   if (typeof businessRules !== 'string' || !businessRules.trim()) {
@@ -25,7 +28,12 @@ async function analyze(diff, businessRules) {
     return { file: c.file, line: c.line, rule_id: c.rule_id, jira_issue_key: c.jira_issue_key, body: c.body,
       suggested_code: c.suggested_code?.trim() || null, severity: c.severity, agent: 'business_logic' };
   });
-  return { comments, tokens };
+  return { comments, tokens, prompt: {
+    version: PROMPT_VERSION,
+    template_sha256: sha256(promptBase),
+    template: promptBase,
+    system_sha256: sha256(system),
+  } };
 }
 
 module.exports = { analyze };
